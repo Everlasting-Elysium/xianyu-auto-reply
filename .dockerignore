@@ -16,3 +16,14 @@ update.sh
 .env
 .env.*
 docker-compose.yml
+node_modules
+.venv
+venv
+frontend/node_modules
+promotion/frontend/node_modules
+promotion/frontend/dist
+pnpm-lock.yaml
+*.egg-info
+build_output
+release
+offline_packages

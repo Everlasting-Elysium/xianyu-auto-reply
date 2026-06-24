@@ -1,0 +1,57 @@
+FROM python:3.11-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
+ENV TZ=Asia/Shanghai
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y \
+    default-mysql-server \
+    redis-server \
+    nginx \
+    supervisor \
+    curl \
+    ca-certificates \
+    gcc \
+    fonts-dejavu-core \
+    fonts-liberation \
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/nginx/sites-enabled/default
+
+COPY common /app/common
+COPY backend-web /app/backend-web
+COPY websocket /app/websocket
+COPY scheduler /app/scheduler
+COPY launcher /app/launcher
+
+RUN python -c "\
+import tomllib; \
+deps = set(); \
+for p in ['/app/backend-web/pyproject.toml', '/app/websocket/pyproject.toml', '/app/scheduler/pyproject.toml']: \
+    d = tomllib.load(open(p,'rb')).get('project',{}).get('dependencies',[]); \
+    deps.update(d); \
+deps = {d for d in deps if 'sys_platform' not in d}; \
+open('/tmp/requirements.txt','w').write('\n'.join(sorted(deps)))" && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    rm /tmp/requirements.txt
+
+RUN python -m playwright install --with-deps chromium
+
+COPY frontend/dist /usr/share/nginx/html
+COPY docker/allinone/nginx.conf /etc/nginx/conf.d/default.conf
+COPY docker/allinone/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY docker/allinone/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+RUN mkdir -p /app/static/uploads /app/backups \
+    /app/backend-web/logs /app/websocket/logs /app/scheduler/logs \
+    /app/websocket/browser_data /data/redis /var/log/supervisor
+
+VOLUME ["/var/lib/mysql", "/data/redis", "/app/static", "/app/backups", "/app/websocket/browser_data"]
+
+EXPOSE 9000 8089 8090 8091
+
+ENTRYPOINT ["/entrypoint.sh"]
