@@ -662,7 +662,7 @@ class DBManagerCompat:
                     'buyer_id': order.buyer_id,
                     'chat_id': order.chat_id,
                     'status': order.status,
-                    'amount': str(order.amount) if order.amount else '0',
+                    'amount': str(order.amount) if order.amount is not None else None,
                     'quantity': order.quantity,
                     'is_bargain': order.is_bargain,
                 }
