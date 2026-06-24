@@ -52,6 +52,6 @@ RUN mkdir -p /app/static/uploads /app/backups \
 
 VOLUME ["/var/lib/mysql", "/data/redis", "/app/static", "/app/backups", "/app/websocket/browser_data"]
 
-EXPOSE 9000 8089 8090 8091
+EXPOSE 80
 
 ENTRYPOINT ["/entrypoint.sh"]
