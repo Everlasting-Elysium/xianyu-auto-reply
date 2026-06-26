@@ -347,6 +347,54 @@ class AutoDeliveryHandler:
         except Exception as e:
             logger.error(f"【{self.cookie_id}】更新订单发货失败原因失败: {self._safe_str(e)}")
 
+    async def _try_charge_order_trigger(
+        self,
+        *,
+        order_id: str,
+        item_id: str,
+        chat_id: str | None,
+        buyer_id: str | None,
+        msg_time: str,
+    ) -> bool:
+        """
+        尝试触发代刷流程。
+
+        Returns:
+            True：命中代刷配方，已处理（成功/失败/参数不全），调用方应跳过原卡券发货
+            False：未命中代刷配方，调用方继续原卡券发货流程
+        """
+        from sqlalchemy import select
+        from common.db.session import async_session_maker
+        from common.models.xy_account import XYAccount
+        from common.services.charge_order_trigger import ChargeOrderTrigger
+
+        async with async_session_maker() as session:
+            account_stmt = select(XYAccount).where(XYAccount.account_id == self.cookie_id)
+            account = (await session.execute(account_stmt)).scalars().first()
+            if not account:
+                logger.debug(f'[{msg_time}] 【{self.cookie_id}】代刷分叉：账号未找到，跳过')
+                return False
+
+            trigger = ChargeOrderTrigger(session)
+            result = await trigger.maybe_trigger(
+                owner_id=account.owner_id,
+                xy_account_id=self.cookie_id,
+                xy_order_no=order_id,
+                item_id=item_id,
+                chat_id=chat_id,
+                buyer_id=buyer_id,
+            )
+
+        if not result.matched:
+            return False
+
+        logger.info(
+            f'[{msg_time}] 【{self.cookie_id}】✅ 代刷分叉命中: '
+            f'order={order_id} charge_order_id={result.charge_order_id} '
+            f'final_status={result.final_status} reason={result.reason}'
+        )
+        return result.skip_card_delivery
+
     async def send_delivery_failure_notification(self, send_user_name, send_user_id, item_id, error_message, chat_id):
         """发送发货通知 - 直接调用NotificationManager"""
         try:
@@ -979,6 +1027,18 @@ class AutoDeliveryHandler:
                 if not self.can_auto_delivery(order_id):
                     logger.info(f'[{msg_time}] 【{self.cookie_id}】订单 {order_id} 在获取锁后检查发现仍在冷却期，跳过发货')
                     return
+
+                # === [代刷分叉] 命中 ChargeSkuRecipe 时改走平台代刷流程，跳过原卡券发货 ===
+                # 文档：common/services/charge_order_trigger.py 顶部 docstring 说明四种命中分支
+                try:
+                    charge_skipped = await self._try_charge_order_trigger(
+                        order_id=order_id, item_id=item_id,
+                        chat_id=chat_id, buyer_id=send_user_id, msg_time=msg_time,
+                    )
+                    if charge_skipped:
+                        return
+                except Exception as e:
+                    logger.error(f'[{msg_time}] 【{self.cookie_id}】代刷分叉异常: {self._safe_str(e)}，回退到原卡券发货流程')
 
                 # 构造用户URL
                 user_url = f'https://www.goofish.com/personal?userId={send_user_id}'
