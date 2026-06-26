@@ -61,7 +61,11 @@ from common.models.xy_platform_blacklist import XYPlatformBlacklist
 from common.models.chat_quick_phrase import ChatQuickPhrase
 from common.models.charge_platform_config import ChargePlatformConfig
 from common.models.charge_sku_mapping import ChargeSkuMapping
+from common.models.charge_platform_category import ChargePlatformCategory
+from common.models.charge_platform_goods import ChargePlatformGoods
+from common.models.charge_sku_recipe import ChargeSkuRecipe, ChargeSkuRecipeItem
 from common.models.charge_order import ChargeOrder
+from common.models.charge_order_sub_order import ChargeOrderSubOrder
 
 __all__ = [
     "User",
@@ -128,5 +132,10 @@ __all__ = [
     "ChatQuickPhrase",
     "ChargePlatformConfig",
     "ChargeSkuMapping",
+    "ChargePlatformCategory",
+    "ChargePlatformGoods",
+    "ChargeSkuRecipe",
+    "ChargeSkuRecipeItem",
     "ChargeOrder",
+    "ChargeOrderSubOrder",
 ]
