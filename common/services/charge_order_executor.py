@@ -32,6 +32,7 @@ from common.models.charge_order_sub_order import ChargeOrderSubOrder
 from common.models.charge_platform_config import ChargePlatformConfig
 from common.models.charge_sku_recipe import ChargeSkuRecipe, ChargeSkuRecipeItem
 from common.services.charge_buyer_input_parser import validate_required_keys
+from common.services.charge_notifier import notify_owner
 from common.services.charge_platform_client import (
     ChargePlatformAuthError,
     ChargePlatformClient,
@@ -301,17 +302,18 @@ class ChargeOrderExecutor:
             template = []
 
         if isinstance(template, list):
-            first_url_value = next(
-                (str(v) for v in buyer_input.values()
-                 if isinstance(v, str) and v.lower().startswith(("http://", "https://"))),
-                None,
-            )
+            url_pool = [
+                str(v) for v in buyer_input.values()
+                if isinstance(v, str) and v.lower().startswith(("http://", "https://"))
+            ]
+            url_cursor = 0
             for field in template:
                 key = field.get("key")
                 if not key or merged.get(key):
                     continue
-                if first_url_value and field.get("type") in (61, "61", 1, "1"):
-                    merged[key] = first_url_value
+                if url_cursor < len(url_pool) and field.get("type") in (61, "61", 1, "1"):
+                    merged[key] = url_pool[url_cursor]
+                    url_cursor += 1
 
         return ChargePlatformClient.build_order_params(
             selection.goods.params_template or "[]",
@@ -364,6 +366,19 @@ class ChargeOrderExecutor:
             f"[charge-exec] main={order.id} 完成: status={order.status} "
             f"success={success} failed={failed} skipped={skipped} needs_review={needs_review}"
         )
+
+        if order.status in ("failed", "partial_success", "needs_review"):
+            await notify_owner(
+                order.owner_id,
+                title=f"代刷订单异常 ({order.status})",
+                message=(
+                    f"闲鱼订单号: {order.xy_order_no}\n"
+                    f"主单 ID: {order.id}\n"
+                    f"结果: 成功 {success} / 失败 {failed} / 跳过 {skipped} / 待核实 {needs_review}\n"
+                    f"原因: {order.fail_reason}"
+                ),
+            )
+
         return ExecutionResult(
             main_order_id=order.id,
             final_status=order.status,

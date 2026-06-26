@@ -102,8 +102,11 @@ class ChargePlatformService:
         config = await self.get_config(config_id, owner_id, is_admin)
         if not config:
             return None
+        # 此处依赖路由层用 model_dump(exclude_unset=True) 过滤出"显式传过的字段"
+        # 凡进入 fields 的就是用户意图修改的，None 也是合法值（用于清空 nullable 字段）
+        # 唯一例外：password 字段如果是 None/空字符串，不应该清空登录密码
         for key, value in fields.items():
-            if value is None:
+            if key == "password" and not value:
                 continue
             if hasattr(config, key):
                 setattr(config, key, value)
@@ -208,8 +211,6 @@ class ChargePlatformService:
         if not mapping:
             return None
         for key, value in fields.items():
-            if value is None:
-                continue
             if hasattr(mapping, key):
                 setattr(mapping, key, value)
         await self.session.commit()

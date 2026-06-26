@@ -150,8 +150,6 @@ class ChargeRecipeService:
         recipe, _ = loaded
 
         for key, value in fields.items():
-            if value is None:
-                continue
             if hasattr(recipe, key):
                 setattr(recipe, key, value)
 

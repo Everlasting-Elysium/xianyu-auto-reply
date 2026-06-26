@@ -135,11 +135,13 @@ class ChargePlatformSyncService:
         synced_at = datetime.now(timezone.utc)
         inserted = updated = total = 0
         seen_goods_ids: list[str] = []
+        fully_traversed = False
 
         try:
             for page in range(1, max_pages + 1):
                 items = await client.list_goods(page=page, page_count=page_size)
                 if not items:
+                    fully_traversed = True
                     break
 
                 for item in items:
@@ -187,6 +189,7 @@ class ChargePlatformSyncService:
                         inserted += 1
 
                 if len(items) < page_size:
+                    fully_traversed = True
                     break
 
                 if (page % 5) == 0:
@@ -198,7 +201,7 @@ class ChargePlatformSyncService:
         finally:
             await client.close()
 
-        if seen_goods_ids:
+        if fully_traversed and seen_goods_ids:
             await self.session.execute(
                 update(ChargePlatformGoods)
                 .where(
@@ -208,12 +211,18 @@ class ChargePlatformSyncService:
                 )
                 .values(is_active=False, last_synced_at=synced_at)
             )
+        elif not fully_traversed:
+            logger.warning(
+                f"[charge-sync] platform={config.id} 未完整遍历商品库（max_pages={max_pages} 已到达）；"
+                f"跳过软删除步骤，避免误杀超出页数的正常商品"
+            )
 
         await self.session.commit()
         result = {
             "inserted": inserted,
             "updated": updated,
             "total_seen": len(seen_goods_ids),
+            "fully_traversed": int(fully_traversed),
         }
         logger.info(f"[charge-sync] platform={config.id} goods: {result}")
         return result

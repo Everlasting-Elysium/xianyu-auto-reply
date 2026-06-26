@@ -47,7 +47,14 @@ class ChargePlatformAuthError(ChargePlatformError):
 
 
 class ChargePlatformClient:
-    """xckj9 流量充值平台客户端"""
+    """xckj9 流量充值平台客户端
+
+    Session 管理设计说明（与项目通用 service 不同）：
+    本 client 的 token 持久化（_save_token / _invalidate_token）需要独立于业务事务，
+    因此内部使用 async_session_maker() 自己管理短事务。
+    业务事务回滚不应导致 token 状态变化（否则下次调用又会触发昂贵的重登流程）。
+    所有 DB 操作都包了 try/except，DB 异常不会传播给业务层。
+    """
 
     def __init__(self, config: ChargePlatformConfig, *, timeout: float = 15.0):
         self.config = config
@@ -171,6 +178,8 @@ class ChargePlatformClient:
         raise ChargePlatformAuthError(f"登录失败: {message}", raw=body)
 
     async def _mark_login_failed(self, reason: str) -> None:
+        owner_id_for_notify: int | None = None
+        platform_name = self.config.name
         try:
             async with async_session_maker() as session:
                 cfg = await session.get(ChargePlatformConfig, self.config_id)
@@ -179,8 +188,19 @@ class ChargePlatformClient:
                     cfg.last_error = reason
                     cfg.last_error_at = datetime.now(timezone.utc)
                     await session.commit()
+                    owner_id_for_notify = cfg.owner_id
         except Exception as e:
             logger.warning(f"[charge-platform:{self.config_id}] 标记登录失败状态写库异常: {e}")
+
+        try:
+            from common.services.charge_notifier import notify_owner
+            await notify_owner(
+                owner_id_for_notify,
+                title="代刷平台账号登录失败",
+                message=f"平台账号「{platform_name}」(配置 id={self.config_id}) 登录失败\n原因: {reason}",
+            )
+        except Exception as e:
+            logger.warning(f"[charge-platform:{self.config_id}] 登录失败通知异常: {e}")
 
     async def _request(
         self,
@@ -250,6 +270,10 @@ class ChargePlatformClient:
         return balance
 
     async def _update_balance_cache(self, balance: Decimal) -> None:
+        should_notify_low = False
+        owner_id_for_notify: int | None = None
+        platform_name = self.config.name
+        threshold = self.config.balance_alert_threshold
         try:
             async with async_session_maker() as session:
                 cfg = await session.get(ChargePlatformConfig, self.config_id)
@@ -258,11 +282,29 @@ class ChargePlatformClient:
                     cfg.balance_checked_at = datetime.now(timezone.utc)
                     if balance < cfg.balance_alert_threshold and cfg.status == "active":
                         cfg.status = "balance_low"
+                        should_notify_low = True
+                        owner_id_for_notify = cfg.owner_id
+                        threshold = cfg.balance_alert_threshold
                     elif balance >= cfg.balance_alert_threshold and cfg.status == "balance_low":
                         cfg.status = "active"
                     await session.commit()
         except Exception as e:
             logger.warning(f"[charge-platform:{self.config_id}] 余额缓存写库异常: {e}")
+
+        if should_notify_low:
+            try:
+                from common.services.charge_notifier import notify_owner
+                await notify_owner(
+                    owner_id_for_notify,
+                    title="代刷平台余额告警",
+                    message=(
+                        f"平台账号「{platform_name}」(配置 id={self.config_id}) 余额过低\n"
+                        f"当前余额: ¥{balance}\n告警阈值: ¥{threshold}\n"
+                        f"请尽快充值，否则后续代刷订单将失败。"
+                    ),
+                )
+            except Exception as e:
+                logger.warning(f"[charge-platform:{self.config_id}] 余额告警通知异常: {e}")
 
     async def get_goods_class_list(self) -> list[dict[str, Any]]:
         body = await self._request("GET", "/api/goodsClassList")
