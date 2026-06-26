@@ -42,6 +42,7 @@ const ItemSearch = React.lazy(() => import('@/pages/search/ItemSearch').then(m =
 const GoofishCompass = React.lazy(() => import('@/pages/compass/GoofishCompass').then(m => ({ default: m.GoofishCompass })))
 const GoofishScheduledCrawler = React.lazy(() => import('@/pages/crawler/GoofishScheduledCrawler').then(m => ({ default: m.GoofishScheduledCrawler })))
 const Cards = React.lazy(() => import('@/pages/cards/Cards').then(m => ({ default: m.Cards })))
+const ChargePlatforms = React.lazy(() => import('@/pages/chargePlatforms/ChargePlatforms').then(m => ({ default: m.ChargePlatforms })))
 const PersonalSettings = React.lazy(() => import('@/pages/personalSettings/PersonalSettings').then(m => ({ default: m.PersonalSettings })))
 const Blacklist = React.lazy(() => import('@/pages/blacklist/Blacklist'))
 const SupplyManagement = React.lazy(() => import('@/pages/distribution/SupplyManagement').then(m => ({ default: m.SupplyManagement })))
@@ -349,6 +350,7 @@ function App() {
             <Route path="goofish-compass" element={<GoofishCompass />} />
             <Route path="goofish-scheduled-crawler" element={<GoofishScheduledCrawler />} />
             <Route path="cards" element={<Cards />} />
+            <Route path="charge-platforms" element={<ChargePlatforms />} />
             <Route path="distribution/supply" element={<SupplyManagement />} />
             <Route path="distribution/card-pickup" element={<CardPickup />} />
             <Route path="distribution/docked" element={<DockedProducts />} />

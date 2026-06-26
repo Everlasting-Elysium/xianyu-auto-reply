@@ -36,6 +36,7 @@ import {
   Store,
   Ticket,
   Timer,
+  Wifi,
   UserCog,
   Users,
   Wallet,
@@ -87,6 +88,7 @@ export const mainNavItems: NavEntry[] = [
   { key: 'online-chat-new', icon: MessageSquare, label: '在线聊天', path: '/online-chat-new' },
   { key: 'items', icon: Package, label: '商品管理', path: '/items' },
   { key: 'cards', icon: Ticket, label: '卡券管理', path: '/cards' },
+  { key: 'charge-platforms', icon: Wifi, label: '流量充值', path: '/charge-platforms' },
   { key: 'orders', icon: ShoppingCart, label: '订单管理', path: '/orders' },
   {
     key: 'distribution',

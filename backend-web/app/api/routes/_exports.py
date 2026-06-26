@@ -22,6 +22,7 @@ from . import (
     captcha,
     cards,
     card_dock,
+    charge_platforms,
     data_analysis,
     distribution,
     chat_new,
@@ -105,6 +106,7 @@ api_router.include_router(cards.router, prefix="/cards", tags=["卡券管理"])
 api_router.include_router(distribution.router, prefix="/distribution", tags=["分销管理"])
 api_router.include_router(card_dock.router, tags=["分销卡券"])  # 已定义prefix="/card-dock"
 api_router.include_router(payment.router, tags=["支付管理"])  # 已定义prefix="/payment"
+api_router.include_router(charge_platforms.router, tags=["流量充值平台"])  # 已定义prefix="/charge-platforms"
 
 # AI回复
 api_router.include_router(ai.router, prefix="/ai-reply-settings", tags=["AI回复"])
