@@ -231,8 +231,29 @@ class ChargeOrderExecutor:
         recipe_item: ChargeSkuRecipeItem,
         buyer_input: dict[str, Any],
     ) -> list[dict[str, str]]:
+        import json as _json
+
         overrides = recipe_item.input_value_overrides or {}
-        merged = {**buyer_input, **overrides}
+        merged: dict[str, Any] = {**buyer_input, **overrides}
+
+        try:
+            template = _json.loads(selection.goods.params_template or "[]")
+        except Exception:
+            template = []
+
+        if isinstance(template, list):
+            first_url_value = next(
+                (str(v) for v in buyer_input.values()
+                 if isinstance(v, str) and v.lower().startswith(("http://", "https://"))),
+                None,
+            )
+            for field in template:
+                key = field.get("key")
+                if not key or merged.get(key):
+                    continue
+                if first_url_value and field.get("type") in (61, "61", 1, "1"):
+                    merged[key] = first_url_value
+
         return ChargePlatformClient.build_order_params(
             selection.goods.params_template or "[]",
             merged,
