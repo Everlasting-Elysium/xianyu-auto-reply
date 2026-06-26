@@ -198,6 +198,7 @@ export const cancelChargeOrder = (id: number): Promise<ApiResponse> => {
 // ────────────── P3: 同步 / 分类 / 商品 / 配方 ──────────────
 
 export interface ChargeSyncResult {
+  accepted?: boolean
   categories?: { inserted: number; updated: number; total_seen: number }
   goods?: { inserted: number; updated: number; total_seen: number }
 }

@@ -29,7 +29,7 @@ export function ChargeSyncDialog({ configId, configName, onClose }: Props) {
         sync_goods: syncGoods,
       })
       setResult(res)
-      addToast({ type: 'success', message: '同步完成' })
+      addToast({ type: 'success', message: res.accepted ? '同步任务已提交，后台处理中' : '同步完成' })
     } catch {
       addToast({ type: 'error', message: '同步失败，请重试' })
     } finally {
@@ -94,27 +94,39 @@ export function ChargeSyncDialog({ configId, configName, onClose }: Props) {
 
           {result && (
             <div className="space-y-2">
-              {result.categories && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-green-700 dark:text-green-300">
-                    <span className="font-medium">分类同步完成</span>
-                    <span className="block text-xs mt-0.5">
-                      新增 {result.categories.inserted} · 更新 {result.categories.updated} · 共 {result.categories.total_seen} 条
-                    </span>
+              {result.accepted ? (
+                <div className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+                  <CheckCircle className="w-4 h-4 text-blue-500 mt-0.5 flex-shrink-0" />
+                  <div className="text-sm text-blue-700 dark:text-blue-300">
+                    <span className="font-medium">同步任务已提交</span>
+                    <span className="block text-xs mt-0.5">预计 1-10 分钟完成，您可以关闭此对话框继续其他操作。</span>
                   </div>
                 </div>
-              )}
-              {result.goods && (
-                <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-green-700 dark:text-green-300">
-                    <span className="font-medium">商品同步完成</span>
-                    <span className="block text-xs mt-0.5">
-                      新增 {result.goods.inserted} · 更新 {result.goods.updated} · 共 {result.goods.total_seen} 条
-                    </span>
-                  </div>
-                </div>
+              ) : (
+                <>
+                  {result.categories && (
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-green-700 dark:text-green-300">
+                        <span className="font-medium">分类同步完成</span>
+                        <span className="block text-xs mt-0.5">
+                          新增 {result.categories.inserted} · 更新 {result.categories.updated} · 共 {result.categories.total_seen} 条
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  {result.goods && (
+                    <div className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+                      <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                      <div className="text-sm text-green-700 dark:text-green-300">
+                        <span className="font-medium">商品同步完成</span>
+                        <span className="block text-xs mt-0.5">
+                          新增 {result.goods.inserted} · 更新 {result.goods.updated} · 共 {result.goods.total_seen} 条
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           )}
