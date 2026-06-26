@@ -194,3 +194,169 @@ export const retryChargeOrder = (id: number, resetRetryCount?: boolean): Promise
 export const cancelChargeOrder = (id: number): Promise<ApiResponse> => {
   return post(`${PREFIX}/orders/${id}/cancel`)
 }
+
+// ────────────── P3: 同步 / 分类 / 商品 / 配方 ──────────────
+
+export interface ChargeSyncResult {
+  categories?: { inserted: number; updated: number; total_seen: number }
+  goods?: { inserted: number; updated: number; total_seen: number }
+}
+
+export interface ChargePlatformCategory {
+  id: number
+  platform_config_id: number
+  platform_category_id: string
+  parent_id: number | null
+  name: string
+  level: number
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ChargePlatformGoods {
+  id: number
+  platform_config_id: number
+  platform_goods_id: string
+  name: string
+  class_name_1: string | null
+  class_name_2: string | null
+  price: string
+  stock: number
+  min_order_num: number
+  max_order_num: number
+  params_template: string | null
+  thumb: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ChargeSkuRecipeItem {
+  id?: number
+  sort: number
+  tag: string
+  preferred_sku_ids: number[] | null
+  fallback_class_name_1: string | null
+  fallback_class_name_2: string | null
+  quantity: number
+  cf_count: number
+  input_value_overrides: Record<string, string> | null
+  is_active: boolean
+}
+
+export interface ChargeSkuRecipe {
+  id: number
+  platform_config_id: number
+  platform_config_name?: string
+  item_id: string
+  spec_value: string | null
+  name: string
+  description: string
+  require_input_keys: string[]
+  is_active: boolean
+  items: ChargeSkuRecipeItem[]
+  created_at: string
+  updated_at: string
+}
+
+export interface CreateChargeSkuRecipe {
+  platform_config_id: number
+  item_id: string
+  spec_value?: string | null
+  name: string
+  description?: string
+  require_input_keys?: string[]
+  is_active?: boolean
+  items: Omit<ChargeSkuRecipeItem, 'id'>[]
+}
+
+export interface UpdateChargeSkuRecipe {
+  platform_config_id?: number
+  item_id?: string
+  spec_value?: string | null
+  name?: string
+  description?: string
+  require_input_keys?: string[]
+  is_active?: boolean
+  items?: Omit<ChargeSkuRecipeItem, 'id'>[]
+}
+
+export type GoodsOrderBy = 'price_asc' | 'price_desc' | 'name_asc'
+
+export interface ListGoodsParams {
+  platformConfigId: number
+  page?: number
+  pageSize?: number
+  keyword?: string
+  className1?: string
+  className2?: string
+  onlyActive?: boolean
+  orderBy?: GoodsOrderBy
+}
+
+// ── Sync ──
+
+export const triggerSync = async (
+  platformConfigId: number,
+  payload: { sync_categories: boolean; sync_goods: boolean },
+): Promise<ChargeSyncResult> => {
+  return post<ChargeSyncResult>(`${PREFIX}/configs/${platformConfigId}/sync`, payload)
+}
+
+// ── Categories ──
+
+export const listCategories = async (platformConfigId: number): Promise<ChargePlatformCategory[]> => {
+  const query = new URLSearchParams()
+  query.set('platform_config_id', String(platformConfigId))
+  query.set('only_active', 'true')
+  return get<ChargePlatformCategory[]>(`${PREFIX}/categories?${query}`)
+}
+
+// ── Goods ──
+
+export const listGoods = async (params: ListGoodsParams): Promise<PaginatedResult<ChargePlatformGoods>> => {
+  const query = new URLSearchParams()
+  query.set('platform_config_id', String(params.platformConfigId))
+  if (params.page) query.set('page', String(params.page))
+  if (params.pageSize) query.set('page_size', String(params.pageSize))
+  if (params.keyword) query.set('keyword', params.keyword)
+  if (params.className1) query.set('class_name_1', params.className1)
+  if (params.className2) query.set('class_name_2', params.className2)
+  if (params.onlyActive !== undefined) query.set('only_active', String(params.onlyActive))
+  if (params.orderBy) query.set('order_by', params.orderBy)
+  return get<PaginatedResult<ChargePlatformGoods>>(`${PREFIX}/goods?${query}`)
+}
+
+// ── Recipes ──
+
+export const listRecipes = async (params?: {
+  page?: number
+  page_size?: number
+  item_id?: string
+  platform_config_id?: number
+}): Promise<PaginatedResult<ChargeSkuRecipe>> => {
+  const query = new URLSearchParams()
+  if (params?.page) query.set('page', String(params.page))
+  if (params?.page_size) query.set('page_size', String(params.page_size))
+  if (params?.item_id) query.set('item_id', params.item_id)
+  if (params?.platform_config_id) query.set('platform_config_id', String(params.platform_config_id))
+  const qs = query.toString()
+  return get<PaginatedResult<ChargeSkuRecipe>>(qs ? `${PREFIX}/recipes?${qs}` : `${PREFIX}/recipes`)
+}
+
+export const getRecipe = (id: number): Promise<ChargeSkuRecipe> => {
+  return get<ChargeSkuRecipe>(`${PREFIX}/recipes/${id}`)
+}
+
+export const createRecipe = (data: CreateChargeSkuRecipe): Promise<ApiResponse> => {
+  return post(`${PREFIX}/recipes`, data)
+}
+
+export const updateRecipe = (id: number, data: UpdateChargeSkuRecipe): Promise<ApiResponse> => {
+  return put(`${PREFIX}/recipes/${id}`, data)
+}
+
+export const deleteRecipe = (id: number): Promise<ApiResponse> => {
+  return del(`${PREFIX}/recipes/${id}`)
+}
