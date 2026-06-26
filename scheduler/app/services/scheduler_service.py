@@ -36,6 +36,9 @@ from app.services.scheduler.listing_monitor_task import listing_monitor_task_ser
 from app.services.scheduler.seller_fill_task import seller_fill_task_service
 from app.services.scheduler.dm_send_task import dm_send_task_service
 from app.services.scheduler.auto_order_task import auto_order_task_service
+from app.services.scheduler.charge_platform_sync_task import charge_platform_sync_task_service
+from app.services.scheduler.charge_balance_check_task import charge_balance_check_task_service
+from app.services.scheduler.charge_order_retry_task import charge_order_retry_task_service
 from app.services.scheduled_task_service import (
     ScheduledTaskService,
     TASK_CODE_REDELIVERY,
@@ -57,6 +60,9 @@ from app.services.scheduled_task_service import (
     TASK_CODE_SELLER_FILL,
     TASK_CODE_DM_SEND,
     TASK_CODE_AUTO_ORDER,
+    TASK_CODE_CHARGE_PLATFORM_SYNC,
+    TASK_CODE_CHARGE_BALANCE_CHECK,
+    TASK_CODE_CHARGE_ORDER_RETRY,
 )
 from common.db.session import async_session_maker
 
@@ -87,6 +93,9 @@ class SchedulerService:
         self._seller_fill_task_handle: Optional[asyncio.Task] = None
         self._dm_send_task_handle: Optional[asyncio.Task] = None
         self._auto_order_task_handle: Optional[asyncio.Task] = None
+        self._charge_platform_sync_task_handle: Optional[asyncio.Task] = None
+        self._charge_balance_check_task_handle: Optional[asyncio.Task] = None
+        self._charge_order_retry_task_handle: Optional[asyncio.Task] = None
         self._redelivery_task = RedeliveryTask()
         self._rate_task = RateTask()
         self._polish_task = polish_task_service
@@ -106,6 +115,9 @@ class SchedulerService:
         self._seller_fill_task = seller_fill_task_service
         self._dm_send_task = dm_send_task_service
         self._auto_order_task = auto_order_task_service
+        self._charge_platform_sync_task = charge_platform_sync_task_service
+        self._charge_balance_check_task = charge_balance_check_task_service
+        self._charge_order_retry_task = charge_order_retry_task_service
     
     @classmethod
     def get_instance(cls) -> "SchedulerService":
@@ -138,6 +150,8 @@ class SchedulerService:
             await self.reload_task_config(task_code)
         for task_code in [TASK_CODE_DELIVERY_TIMEOUT, TASK_CODE_LISTING_MONITOR, TASK_CODE_SELLER_FILL, TASK_CODE_DM_SEND, TASK_CODE_AUTO_ORDER]:
             await self.reload_task_config(task_code)
+        for task_code in [TASK_CODE_CHARGE_PLATFORM_SYNC, TASK_CODE_CHARGE_BALANCE_CHECK, TASK_CODE_CHARGE_ORDER_RETRY]:
+            await self.reload_task_config(task_code)
     
     def start(self) -> None:
         """启动定时任务"""
@@ -166,6 +180,9 @@ class SchedulerService:
         self._seller_fill_task_handle = asyncio.create_task(self._run_seller_fill_loop())
         self._dm_send_task_handle = asyncio.create_task(self._run_dm_send_loop())
         self._auto_order_task_handle = asyncio.create_task(self._run_auto_order_loop())
+        self._charge_platform_sync_task_handle = asyncio.create_task(self._run_charge_platform_sync_loop())
+        self._charge_balance_check_task_handle = asyncio.create_task(self._run_charge_balance_check_loop())
+        self._charge_order_retry_task_handle = asyncio.create_task(self._run_charge_order_retry_loop())
         logger.info("[定时任务调度] 已启动")
     
     def stop(self) -> None:
@@ -232,6 +249,15 @@ class SchedulerService:
         if self._auto_order_task_handle:
             self._auto_order_task_handle.cancel()
             self._auto_order_task_handle = None
+        if self._charge_platform_sync_task_handle:
+            self._charge_platform_sync_task_handle.cancel()
+            self._charge_platform_sync_task_handle = None
+        if self._charge_balance_check_task_handle:
+            self._charge_balance_check_task_handle.cancel()
+            self._charge_balance_check_task_handle = None
+        if self._charge_order_retry_task_handle:
+            self._charge_order_retry_task_handle.cancel()
+            self._charge_order_retry_task_handle = None
         logger.info("[定时任务调度] 已停止")
     
     def get_task_status(self) -> dict:
@@ -392,6 +418,30 @@ class SchedulerService:
                         and not self._auto_order_task_handle.done()
                     ),
                 },
+                TASK_CODE_CHARGE_PLATFORM_SYNC: {
+                    "config": ScheduledTaskService.get_cached_config(TASK_CODE_CHARGE_PLATFORM_SYNC)
+                              or {"interval_seconds": 21600, "enabled": True},
+                    "task_running": (
+                        self._charge_platform_sync_task_handle is not None
+                        and not self._charge_platform_sync_task_handle.done()
+                    ),
+                },
+                TASK_CODE_CHARGE_BALANCE_CHECK: {
+                    "config": ScheduledTaskService.get_cached_config(TASK_CODE_CHARGE_BALANCE_CHECK)
+                              or {"interval_seconds": 900, "enabled": True},
+                    "task_running": (
+                        self._charge_balance_check_task_handle is not None
+                        and not self._charge_balance_check_task_handle.done()
+                    ),
+                },
+                TASK_CODE_CHARGE_ORDER_RETRY: {
+                    "config": ScheduledTaskService.get_cached_config(TASK_CODE_CHARGE_ORDER_RETRY)
+                              or {"interval_seconds": 300, "enabled": True},
+                    "task_running": (
+                        self._charge_order_retry_task_handle is not None
+                        and not self._charge_order_retry_task_handle.done()
+                    ),
+                },
             }
         }
     
@@ -459,6 +509,15 @@ class SchedulerService:
         elif task_code == TASK_CODE_AUTO_ORDER:
             logger.info("[定时任务调度] 手动触发采集商品自动下单任务")
             await self._auto_order_task.execute()
+        elif task_code == TASK_CODE_CHARGE_PLATFORM_SYNC:
+            logger.info("[定时任务调度] 手动触发代刷平台数据同步任务")
+            await self._charge_platform_sync_task.execute()
+        elif task_code == TASK_CODE_CHARGE_BALANCE_CHECK:
+            logger.info("[定时任务调度] 手动触发代刷平台余额检查任务")
+            await self._charge_balance_check_task.execute()
+        elif task_code == TASK_CODE_CHARGE_ORDER_RETRY:
+            logger.info("[定时任务调度] 手动触发代刷订单重试任务")
+            await self._charge_order_retry_task.execute()
         else:
             logger.warning(f"[定时任务调度] 未知的任务代码: {task_code}")
     
@@ -1087,6 +1146,56 @@ class SchedulerService:
                 break
 
         logger.info("[定时任务调度] 采集商品自动下单任务循环结束")
+
+    async def _run_charge_loop(self, *, task_code: str, label: str, runner, default_interval: int) -> None:
+        logger.info(f"[定时任务调度] {label} 任务循环开始")
+        await self.reload_task_config(task_code)
+        while self._running:
+            config = ScheduledTaskService.get_cached_config(task_code) or {
+                "interval_seconds": default_interval, "enabled": True,
+            }
+            interval = config.get("interval_seconds", default_interval)
+            enabled = config.get("enabled", True)
+
+            if enabled:
+                try:
+                    await runner.execute()
+                except asyncio.CancelledError:
+                    logger.info(f"[定时任务调度] {label} 任务被取消")
+                    break
+                except Exception as e:
+                    logger.error(f"[定时任务调度] {label} 任务执行异常: {e}")
+
+            try:
+                await asyncio.sleep(interval)
+            except asyncio.CancelledError:
+                logger.info(f"[定时任务调度] {label} 任务等待被取消")
+                break
+        logger.info(f"[定时任务调度] {label} 任务循环结束")
+
+    async def _run_charge_platform_sync_loop(self) -> None:
+        await self._run_charge_loop(
+            task_code=TASK_CODE_CHARGE_PLATFORM_SYNC,
+            label="代刷平台数据同步",
+            runner=self._charge_platform_sync_task,
+            default_interval=21600,
+        )
+
+    async def _run_charge_balance_check_loop(self) -> None:
+        await self._run_charge_loop(
+            task_code=TASK_CODE_CHARGE_BALANCE_CHECK,
+            label="代刷平台余额检查",
+            runner=self._charge_balance_check_task,
+            default_interval=900,
+        )
+
+    async def _run_charge_order_retry_loop(self) -> None:
+        await self._run_charge_loop(
+            task_code=TASK_CODE_CHARGE_ORDER_RETRY,
+            label="代刷订单重试",
+            runner=self._charge_order_retry_task,
+            default_interval=300,
+        )
 
 
 # 全局实例获取函数

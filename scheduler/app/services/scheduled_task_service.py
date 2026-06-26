@@ -38,6 +38,9 @@ TASK_CODE_LISTING_MONITOR = "listing_monitor"
 TASK_CODE_SELLER_FILL = "seller_fill"
 TASK_CODE_DM_SEND = "dm_send"
 TASK_CODE_AUTO_ORDER = "auto_order"
+TASK_CODE_CHARGE_PLATFORM_SYNC = "charge_platform_sync"
+TASK_CODE_CHARGE_BALANCE_CHECK = "charge_balance_check"
+TASK_CODE_CHARGE_ORDER_RETRY = "charge_order_retry"
 
 # 默认配置（数据库无配置时使用）
 DEFAULT_CONFIGS = {
@@ -60,6 +63,9 @@ DEFAULT_CONFIGS = {
     TASK_CODE_SELLER_FILL: {"interval_seconds": 60, "enabled": True},
     TASK_CODE_DM_SEND: {"interval_seconds": 60, "enabled": True},
     TASK_CODE_AUTO_ORDER: {"interval_seconds": 60, "enabled": True},
+    TASK_CODE_CHARGE_PLATFORM_SYNC: {"interval_seconds": 21600, "enabled": True},
+    TASK_CODE_CHARGE_BALANCE_CHECK: {"interval_seconds": 900, "enabled": True},
+    TASK_CODE_CHARGE_ORDER_RETRY: {"interval_seconds": 300, "enabled": True},
 }
 
 
