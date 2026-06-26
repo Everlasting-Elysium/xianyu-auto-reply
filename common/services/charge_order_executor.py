@@ -7,9 +7,15 @@
 3. 部分成功也算成功（业务约定）：N 个子项里只要 ≥1 成功就标 success/partial_success
 4. 失败的子单写明 fail_reason，由重试任务后续兜底
 
-幂等保证：
-- 已经 success/failed 的子单不会重新下单
-- 重跑执行器会跳过已完成子项，只处理 pending/failed 状态的
+并发与幂等保证（关键，P0 修复后）：
+- 主单级别用 Redis 分布式锁（charge_order:{id}）防止并发执行
+- 主单已 ordering 状态：不允许重入（避免并发执行器同时操作同一主单）
+- 子单状态机：
+    pending → ordering：commit 后调 platform API
+    重入时遇到 ordering：标记 needs_review 并跳过（运维人工核实是否已扣费）
+    重入时遇到 success：直接跳过（已确认成功）
+    重入时遇到 failed：可重试（首次失败时确认未扣费才会标 failed）
+- xckj9 平台无幂等键支持，"宁可少下不可重复扣费"
 """
 from __future__ import annotations
 
@@ -54,6 +60,31 @@ class ChargeOrderExecutor:
         self.selector = ChargeSkuSelector(session)
 
     async def execute(self, main_order_id: int) -> ExecutionResult:
+        from common.db.redis_client import release_delivery_lock, try_acquire_delivery_lock
+
+        lock_result = await try_acquire_delivery_lock(
+            f"charge_order:{main_order_id}",
+            expire=600,
+            holder_info="charge_executor",
+            wait_timeout=0,
+        )
+        if lock_result.is_locked_by_other:
+            logger.warning(f"[charge-exec] main={main_order_id} 锁被其他进程持有，跳过本次执行")
+            return ExecutionResult(
+                main_order_id=main_order_id,
+                final_status="pending",
+                successful_sub_orders=0,
+                failed_sub_orders=0,
+                skipped_sub_orders=0,
+                fail_summary="正在被其他进程执行，本次跳过",
+            )
+
+        try:
+            return await self._execute_locked(main_order_id)
+        finally:
+            await release_delivery_lock(lock_result)
+
+    async def _execute_locked(self, main_order_id: int) -> ExecutionResult:
         order = await self._load_main_order(main_order_id)
 
         try:
@@ -68,7 +99,7 @@ class ChargeOrderExecutor:
 
         existing_subs = await self._load_existing_sub_orders(order.id)
         client = ChargePlatformClient(config)
-        success = failed = skipped = 0
+        success = failed = skipped = needs_review = 0
         try:
             for item in items:
                 if not item.is_active:
@@ -77,6 +108,17 @@ class ChargeOrderExecutor:
                 existing = existing_subs.get(item.id)
                 if existing and existing.status == "success":
                     success += 1
+                    continue
+                if existing and existing.status == "ordering":
+                    await self._mark_sub_needs_review(existing)
+                    needs_review += 1
+                    logger.warning(
+                        f"[charge-exec] main={order.id} sub={existing.id} "
+                        f"重入时发现 ordering 状态子单，标记 needs_review（拒绝重复下单）"
+                    )
+                    continue
+                if existing and existing.status == "needs_review":
+                    needs_review += 1
                     continue
 
                 sub_outcome = await self._execute_sub_item(
@@ -95,7 +137,19 @@ class ChargeOrderExecutor:
         finally:
             await client.close()
 
-        return await self._finalize(order, success=success, failed=failed, skipped=skipped)
+        return await self._finalize(
+            order, success=success, failed=failed, skipped=skipped, needs_review=needs_review,
+        )
+
+    async def _mark_sub_needs_review(self, sub: ChargeOrderSubOrder) -> None:
+        sub.status = "needs_review"
+        sub.fail_reason = (
+            "执行器重入时发现该子单卡在 ordering 状态。"
+            "可能首次下单时进程崩溃，无法判断平台是否已收到下单请求。"
+            "请人工到平台后台核实是否已扣费："
+            "若已下单则手工标记本子单 success，否则手工标记 failed 后重试。"
+        )
+        await self.session.commit()
 
     async def _load_main_order(self, main_order_id: int) -> ChargeOrder:
         order = await self.session.get(ChargeOrder, main_order_id)
@@ -103,6 +157,12 @@ class ChargeOrderExecutor:
             raise ChargePlatformError(f"主单 {main_order_id} 不存在")
         if order.status in ("success", "cancelled"):
             raise ChargePlatformError(f"主单 {main_order_id} 状态 {order.status} 不可执行")
+        if order.status == "ordering":
+            raise ChargePlatformError(
+                f"主单 {main_order_id} 状态为 ordering（可能是上次执行中崩溃留下的）。"
+                "请先检查该主单的所有子单，将卡在 ordering 状态的子单按平台实际情况手工调整为 success/failed，"
+                "然后将主单状态改回 pending 重新执行。"
+            )
         return order
 
     async def _load_recipe(self, order: ChargeOrder) -> tuple[ChargeSkuRecipe, list[ChargeSkuRecipeItem]]:
@@ -155,7 +215,6 @@ class ChargeOrderExecutor:
             recipe_item_id=recipe_item.id,
             sort=recipe_item.sort,
             tag=recipe_item.tag,
-            platform_goods_id="",
             quantity=recipe_item.quantity,
             cf_count=recipe_item.cf_count,
             status="pending",
@@ -280,8 +339,15 @@ class ChargeOrderExecutor:
         success: int,
         failed: int,
         skipped: int,
+        needs_review: int = 0,
     ) -> ExecutionResult:
-        if success > 0 and failed == 0 and skipped == 0:
+        if needs_review > 0:
+            order.status = "needs_review"
+            order.fail_reason = (
+                f"有 {needs_review} 个子单需要人工核实（疑似重入风险）。"
+                f"其他子项情况：成功 {success}, 失败 {failed}, 跳过 {skipped}"
+            )
+        elif success > 0 and failed == 0 and skipped == 0:
             order.status = "success"
             order.fail_reason = None
         elif success > 0:
@@ -296,7 +362,7 @@ class ChargeOrderExecutor:
 
         logger.info(
             f"[charge-exec] main={order.id} 完成: status={order.status} "
-            f"success={success} failed={failed} skipped={skipped}"
+            f"success={success} failed={failed} skipped={skipped} needs_review={needs_review}"
         )
         return ExecutionResult(
             main_order_id=order.id,

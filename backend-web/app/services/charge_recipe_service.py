@@ -252,6 +252,30 @@ class ChargeRecipeService:
             "items": items,
         }
 
+    async def assert_platform_config_accessible(
+        self,
+        platform_config_id: int,
+        owner_id: int,
+        is_admin: bool,
+    ) -> ChargePlatformConfig:
+        cfg = await self.session.get(ChargePlatformConfig, platform_config_id)
+        if not cfg:
+            raise ValueError(f"平台账号配置 {platform_config_id} 不存在")
+        if not is_admin and cfg.owner_id is not None and cfg.owner_id != owner_id:
+            raise ValueError("无权访问该平台账号")
+        return cfg
+
+    async def assert_can_sync(
+        self,
+        platform_config_id: int,
+        owner_id: int,
+        is_admin: bool,
+    ) -> ChargePlatformConfig:
+        cfg = await self.assert_platform_config_accessible(platform_config_id, owner_id, is_admin)
+        if not cfg.enabled:
+            raise ValueError("该平台账号已禁用")
+        return cfg
+
     async def trigger_sync(
         self,
         platform_config_id: int,
@@ -261,13 +285,7 @@ class ChargeRecipeService:
         sync_categories: bool = True,
         sync_goods: bool = True,
     ) -> dict[str, Any]:
-        cfg = await self.session.get(ChargePlatformConfig, platform_config_id)
-        if not cfg:
-            raise ValueError(f"平台账号配置 {platform_config_id} 不存在")
-        if not is_admin and cfg.owner_id is not None and cfg.owner_id != owner_id:
-            raise ValueError("无权同步该平台账号")
-        if not cfg.enabled:
-            raise ValueError("该平台账号已禁用")
+        cfg = await self.assert_can_sync(platform_config_id, owner_id, is_admin)
 
         service = ChargePlatformSyncService(self.session)
         result: dict[str, Any] = {}

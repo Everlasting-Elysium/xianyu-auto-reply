@@ -266,9 +266,9 @@ class ChargePlatformService:
         order = await self.get_order(order_id, owner_id)
         if not order:
             return None
-        if order.status not in ("failed", "ready"):
+        if order.status not in ("failed", "partial_success", "needs_review"):
             raise ValueError(f"当前状态 {order.status} 不允许重试")
-        order.status = "ready"
+        order.status = "pending"
         order.next_retry_at = None
         order.fail_reason = None
         if reset_retry_count:

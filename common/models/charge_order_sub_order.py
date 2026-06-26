@@ -42,9 +42,9 @@ class ChargeOrderSubOrder(TimestampMixin, Base):
     )
     sort: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     tag: Mapped[str] = mapped_column(String(64), nullable=False, comment="业务标签快照")
-    platform_goods_id: Mapped[str] = mapped_column(
-        String(64), nullable=False,
-        comment="选中的平台商品 Id（下单后落库即冻结，便于事后追溯）"
+    platform_goods_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True,
+        comment="选中的平台商品 Id（选品成功后填充；下单前为 NULL）"
     )
     platform_goods_name: Mapped[str | None] = mapped_column(
         String(256), nullable=True,
@@ -66,7 +66,7 @@ class ChargeOrderSubOrder(TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending", server_default="pending",
-        comment="pending/ordering/success/failed/skipped"
+        comment="pending/ordering/success/failed/skipped/needs_review"
     )
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)

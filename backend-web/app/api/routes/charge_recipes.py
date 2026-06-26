@@ -1,11 +1,13 @@
 """代刷配方管理路由（recipes + categories + goods + sync）"""
 from __future__ import annotations
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Query
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api import deps
 from app.services.charge_recipe_service import ChargeRecipeService
+from common.db.session import async_session_maker
 from common.models.user import User
 from common.schemas.charge import (
     ChargePlatformCategoryOut,
@@ -143,6 +145,16 @@ async def list_categories(
     current_user: User = Depends(deps.get_current_active_user),
     service: ChargeRecipeService = Depends(get_recipe_service),
 ):
+    _, is_admin = resolve_owner_scope(current_user)
+    try:
+        await service.assert_platform_config_accessible(
+            platform_config_id=platform_config_id,
+            owner_id=current_user.id,
+            is_admin=is_admin,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
     rows = await service.list_categories(platform_config_id, only_active=only_active)
     return ApiResponse(
         success=True,
@@ -163,6 +175,16 @@ async def list_goods(
     current_user: User = Depends(deps.get_current_active_user),
     service: ChargeRecipeService = Depends(get_recipe_service),
 ):
+    _, is_admin = resolve_owner_scope(current_user)
+    try:
+        await service.assert_platform_config_accessible(
+            platform_config_id=platform_config_id,
+            owner_id=current_user.id,
+            is_admin=is_admin,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+
     result = await service.list_goods(
         platform_config_id=platform_config_id,
         page=page,
@@ -185,30 +207,61 @@ async def list_goods(
     )
 
 
+async def _run_sync_in_background(
+    platform_config_id: int,
+    owner_id: int,
+    is_admin: bool,
+    sync_categories: bool,
+    sync_goods: bool,
+) -> None:
+    """同步任务的后台执行入口（每次开新 session，独立事务）"""
+    try:
+        async with async_session_maker() as session:
+            service = ChargeRecipeService(session)
+            result = await service.trigger_sync(
+                platform_config_id=platform_config_id,
+                owner_id=owner_id,
+                is_admin=is_admin,
+                sync_categories=sync_categories,
+                sync_goods=sync_goods,
+            )
+            logger.info(
+                f"[charge-sync] platform={platform_config_id} 后台同步完成: {result}"
+            )
+    except Exception as e:
+        logger.error(
+            f"[charge-sync] platform={platform_config_id} 后台同步失败: {type(e).__name__}: {e}"
+        )
+
+
 @router.post("/configs/{platform_config_id}/sync")
 async def trigger_sync(
     platform_config_id: int,
+    background_tasks: BackgroundTasks,
     payload: ChargeSyncRequest = Body(default_factory=ChargeSyncRequest),
     current_user: User = Depends(deps.get_current_active_user),
     service: ChargeRecipeService = Depends(get_recipe_service),
 ):
     _, is_admin = resolve_owner_scope(current_user)
     try:
-        result = await service.trigger_sync(
+        await service.assert_can_sync(
             platform_config_id=platform_config_id,
             owner_id=current_user.id,
             is_admin=is_admin,
-            sync_categories=payload.sync_categories,
-            sync_goods=payload.sync_goods,
         )
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    background_tasks.add_task(
+        _run_sync_in_background,
+        platform_config_id=platform_config_id,
+        owner_id=current_user.id,
+        is_admin=is_admin,
+        sync_categories=payload.sync_categories,
+        sync_goods=payload.sync_goods,
+    )
     return ApiResponse(
         success=True,
-        message="同步完成",
-        data=ChargeSyncResponse(
-            categories=result.get("categories"),
-            goods=result.get("goods"),
-        ).model_dump(mode="json"),
+        message="同步任务已提交，正在后台执行（约 1-10 分钟），稍后请刷新页面查看商品数量",
+        data={"accepted": True},
     )

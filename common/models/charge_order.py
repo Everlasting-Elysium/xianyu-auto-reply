@@ -52,7 +52,7 @@ class ChargeOrder(TimestampMixin, Base):
     )
     status: Mapped[str] = mapped_column(
         String(32), nullable=False, default="pending", server_default="pending",
-        comment="pending/ordering/success/partial_success/failed/cancelled"
+        comment="pending/ordering/success/partial_success/failed/cancelled/needs_review"
     )
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     max_retries: Mapped[int] = mapped_column(Integer, nullable=False, default=3, server_default="3")
