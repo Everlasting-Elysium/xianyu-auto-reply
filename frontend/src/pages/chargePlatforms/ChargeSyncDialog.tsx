@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Loader2, RefreshCw, CheckCircle, FolderSync } from 'lucide-react'
 import { triggerSync, type ChargeSyncResult } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 
 interface Props {
   configId: number
@@ -30,8 +31,8 @@ export function ChargeSyncDialog({ configId, configName, onClose }: Props) {
       })
       setResult(res)
       addToast({ type: 'success', message: res.accepted ? '同步任务已提交，后台处理中' : '同步完成' })
-    } catch {
-      addToast({ type: 'error', message: '同步失败，请重试' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '同步失败，请重试') })
     } finally {
       setSyncing(false)
     }

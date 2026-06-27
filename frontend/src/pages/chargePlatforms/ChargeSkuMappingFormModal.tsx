@@ -9,6 +9,7 @@ import {
   type ChargePlatformConfig,
 } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 
 interface MappingFormData {
   platform_config_id: string
@@ -58,7 +59,7 @@ export function ChargeSkuMappingFormModal({ mapping, onClose, onSaved }: Props) 
   useEffect(() => {
     getChargePlatformConfigs({ page_size: 100 })
       .then(res => setConfigs(res.items || []))
-      .catch(() => addToast({ type: 'error', message: '加载平台账号列表失败' }))
+      .catch((error) => addToast({ type: 'error', message: getApiErrorMessage(error, '加载平台账号列表失败') }))
   }, [])
 
   const updateField = <K extends keyof MappingFormData>(field: K, value: MappingFormData[K]) => {
@@ -95,8 +96,8 @@ export function ChargeSkuMappingFormModal({ mapping, onClose, onSaved }: Props) 
       }
       onSaved()
       onClose()
-    } catch {
-      addToast({ type: 'error', message: isEdit ? '更新失败' : '创建失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, isEdit ? '更新失败' : '创建失败') })
     } finally {
       setSaving(false)
     }

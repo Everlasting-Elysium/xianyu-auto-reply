@@ -7,6 +7,7 @@ import {
   type ChargePlatformConfig,
 } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 
 interface ConfigFormData {
   name: string
@@ -104,8 +105,8 @@ export function ChargePlatformConfigFormModal({ config, onClose, onSaved }: Prop
       }
       onSaved()
       onClose()
-    } catch {
-      addToast({ type: 'error', message: isEdit ? '更新失败' : '创建失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, isEdit ? '更新失败' : '创建失败') })
     } finally {
       setSaving(false)
     }

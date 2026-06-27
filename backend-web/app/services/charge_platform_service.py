@@ -124,14 +124,19 @@ class ChargePlatformService:
 
     async def list_sku_mappings(
         self,
-        owner_id: int,
+        owner_id: int | None,
+        is_admin: bool = False,
         page: int = 1,
         page_size: int = 50,
         item_id: str = "",
         platform_config_id: int | None = None,
     ) -> dict[str, Any]:
-        stmt = select(ChargeSkuMapping).where(ChargeSkuMapping.owner_id == owner_id)
-        count_stmt = select(func.count()).select_from(ChargeSkuMapping).where(ChargeSkuMapping.owner_id == owner_id)
+        stmt = select(ChargeSkuMapping)
+        count_stmt = select(func.count()).select_from(ChargeSkuMapping)
+
+        if not is_admin:
+            stmt = stmt.where(ChargeSkuMapping.owner_id == owner_id)
+            count_stmt = count_stmt.where(ChargeSkuMapping.owner_id == owner_id)
 
         if item_id:
             stmt = stmt.where(ChargeSkuMapping.item_id == item_id)
@@ -229,14 +234,19 @@ class ChargePlatformService:
 
     async def list_orders(
         self,
-        owner_id: int,
+        owner_id: int | None,
+        is_admin: bool = False,
         page: int = 1,
         page_size: int = 20,
         status: str = "",
         xy_order_no: str = "",
     ) -> dict[str, Any]:
-        stmt = select(ChargeOrder).where(ChargeOrder.owner_id == owner_id)
-        count_stmt = select(func.count()).select_from(ChargeOrder).where(ChargeOrder.owner_id == owner_id)
+        stmt = select(ChargeOrder)
+        count_stmt = select(func.count()).select_from(ChargeOrder)
+
+        if not is_admin:
+            stmt = stmt.where(ChargeOrder.owner_id == owner_id)
+            count_stmt = count_stmt.where(ChargeOrder.owner_id == owner_id)
 
         if status:
             stmt = stmt.where(ChargeOrder.status == status)

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { X, Loader2, RotateCw, XCircle } from 'lucide-react'
 import { retryChargeOrder, cancelChargeOrder, type ChargeOrder, type ChargeOrderStatus } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 
 const statusLabels: Record<ChargeOrderStatus, string> = {
   pending: '待处理',
@@ -45,8 +46,8 @@ export function ChargeOrderDetailModal({ order, onClose, onRefresh }: Props) {
       addToast({ type: 'success', message: '重试已发起' })
       onRefresh()
       onClose()
-    } catch {
-      addToast({ type: 'error', message: '重试失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '重试失败') })
     } finally {
       setRetrying(false)
     }
@@ -59,8 +60,8 @@ export function ChargeOrderDetailModal({ order, onClose, onRefresh }: Props) {
       addToast({ type: 'success', message: '订单已取消' })
       onRefresh()
       onClose()
-    } catch {
-      addToast({ type: 'error', message: '取消失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '取消失败') })
     } finally {
       setCancelling(false)
     }

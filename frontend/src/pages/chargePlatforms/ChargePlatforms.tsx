@@ -20,6 +20,7 @@ import {
   type ChargeSkuRecipe,
 } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 import { useAuthStore } from '@/store/authStore'
 import { PageLoading } from '@/components/common/Loading'
 import { ConfirmModal } from '@/components/common/ConfirmModal'
@@ -171,8 +172,8 @@ export function ChargePlatforms() {
       const res = await getChargePlatformConfigs({ page: pg, page_size: sz, search: sr || undefined })
       setConfigs(res.items || [])
       setConfigTotal(res.total || 0)
-    } catch {
-      addToast({ type: 'error', message: '加载平台账号列表失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '加载平台账号列表失败') })
     } finally {
       setLoading(false)
     }
@@ -192,8 +193,8 @@ export function ChargePlatforms() {
       })
       setMappings(res.items || [])
       setMappingTotal(res.total || 0)
-    } catch {
-      addToast({ type: 'error', message: '加载套餐映射列表失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '加载套餐映射列表失败') })
     } finally {
       setLoading(false)
     }
@@ -213,8 +214,8 @@ export function ChargePlatforms() {
       })
       setOrders(res.items || [])
       setOrderTotal(res.total || 0)
-    } catch {
-      addToast({ type: 'error', message: '加载订单列表失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '加载订单列表失败') })
     } finally {
       setLoading(false)
     }
@@ -234,8 +235,8 @@ export function ChargePlatforms() {
       })
       setRecipes(res.items || [])
       setRecipeTotal(res.total || 0)
-    } catch {
-      addToast({ type: 'error', message: '加载配方列表失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '加载配方列表失败') })
     } finally {
       setLoading(false)
     }
@@ -277,8 +278,8 @@ export function ChargePlatforms() {
       await updateChargePlatformConfig(config.id, { enabled: !config.enabled })
       addToast({ type: 'success', message: `已${config.enabled ? '禁用' : '启用'}` })
       loadConfigs()
-    } catch {
-      addToast({ type: 'error', message: '操作失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '操作失败') })
     }
   }
 
@@ -289,8 +290,8 @@ export function ChargePlatforms() {
       addToast({ type: 'success', message: '已删除' })
       setConfigDeleteConfirm({ open: false, config: null })
       loadConfigs()
-    } catch {
-      addToast({ type: 'error', message: '删除失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '删除失败') })
     }
   }
 
@@ -301,8 +302,8 @@ export function ChargePlatforms() {
       addToast({ type: 'success', message: '已删除' })
       setMappingDeleteConfirm({ open: false, mapping: null })
       loadMappings()
-    } catch {
-      addToast({ type: 'error', message: '删除失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '删除失败') })
     }
   }
 
@@ -313,8 +314,8 @@ export function ChargePlatforms() {
       addToast({ type: 'success', message: '已删除' })
       setRecipeDeleteConfirm({ open: false, recipe: null })
       loadRecipes()
-    } catch {
-      addToast({ type: 'error', message: '删除失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '删除失败') })
     }
   }
 

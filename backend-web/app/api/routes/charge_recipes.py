@@ -48,23 +48,23 @@ async def list_recipes(
     current_user: User = Depends(deps.get_current_active_user),
     service: ChargeRecipeService = Depends(get_recipe_service),
 ):
+    _, is_admin = resolve_owner_scope(current_user)
     result = await service.list_recipes(
-        owner_id=current_user.id,
+        owner_id=current_user.id if not is_admin else None,
+        is_admin=is_admin,
         page=page,
         page_size=page_size,
         item_id=item_id,
         platform_config_id=platform_config_id,
     )
     items = [_serialize_recipe(r["recipe"], r["items"]) for r in result["items"]]
-    return ApiResponse(
-        success=True,
-        data={
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-            "items": items,
-        },
-    )
+    return {
+        "success": True,
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "items": items,
+    }
 
 
 @router.post("/recipes")
@@ -196,15 +196,13 @@ async def list_goods(
         order_by=order_by,
     )
     items = [ChargePlatformGoodsOut.model_validate(it).model_dump(mode="json") for it in result["items"]]
-    return ApiResponse(
-        success=True,
-        data={
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-            "items": items,
-        },
-    )
+    return {
+        "success": True,
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "items": items,
+    }
 
 
 async def _run_sync_in_background(

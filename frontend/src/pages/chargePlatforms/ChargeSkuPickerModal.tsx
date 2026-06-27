@@ -8,6 +8,7 @@ import {
   type ChargePlatformCategory, type ChargePlatformGoods, type GoodsOrderBy,
 } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 
 interface CategoryNode extends ChargePlatformCategory {
   children: CategoryNode[]
@@ -120,7 +121,7 @@ export function ChargeSkuPickerModal({ platformConfigId, selectedIds, onConfirm,
     setCatLoading(true)
     listCategories(platformConfigId)
       .then(setCategories)
-      .catch(() => addToast({ type: 'error', message: '加载分类失败' }))
+      .catch((error) => addToast({ type: 'error', message: getApiErrorMessage(error, '加载分类失败') }))
       .finally(() => setCatLoading(false))
   }, [platformConfigId, addToast])
 
@@ -139,8 +140,8 @@ export function ChargeSkuPickerModal({ platformConfigId, selectedIds, onConfirm,
       })
       setGoods(res.items || [])
       setGoodsTotal(res.total || 0)
-    } catch {
-      addToast({ type: 'error', message: '加载商品列表失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, '加载商品列表失败') })
     } finally {
       setGoodsLoading(false)
     }

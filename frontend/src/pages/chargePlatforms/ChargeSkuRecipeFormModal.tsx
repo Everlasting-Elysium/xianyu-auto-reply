@@ -9,6 +9,7 @@ import {
   type ChargePlatformConfig, type ChargePlatformCategory,
 } from '@/api/chargePlatforms'
 import { useUIStore } from '@/store/uiStore'
+import { getApiErrorMessage } from '@/utils/request'
 import { ChargeSkuPickerModal } from './ChargeSkuPickerModal'
 
 interface RecipeItemForm {
@@ -72,7 +73,7 @@ export function ChargeSkuRecipeFormModal({ recipeId, onClose, onSaved }: Props) 
   useEffect(() => {
     getChargePlatformConfigs({ page: 1, page_size: 200 })
       .then(r => setConfigs(r.items || []))
-      .catch(() => addToast({ type: 'error', message: '加载平台账号失败' }))
+      .catch((error) => addToast({ type: 'error', message: getApiErrorMessage(error, '加载平台账号失败') }))
   }, [addToast])
 
   // ── Load categories when platform changes ──
@@ -114,7 +115,7 @@ export function ChargeSkuRecipeFormModal({ recipeId, onClose, onSaved }: Props) 
             : [emptyItem()],
         )
       })
-      .catch(() => { addToast({ type: 'error', message: '加载配方详情失败' }); onClose() })
+      .catch((error) => { addToast({ type: 'error', message: getApiErrorMessage(error, '加载配方详情失败') }); onClose() })
       .finally(() => setInitLoading(false))
   }, [recipeId, addToast, onClose])
 
@@ -213,8 +214,8 @@ export function ChargeSkuRecipeFormModal({ recipeId, onClose, onSaved }: Props) 
       }
       onSaved()
       onClose()
-    } catch {
-      addToast({ type: 'error', message: isEdit ? '更新配方失败' : '创建配方失败' })
+    } catch (error) {
+      addToast({ type: 'error', message: getApiErrorMessage(error, isEdit ? '更新配方失败' : '创建配方失败') })
     } finally {
       setSaving(false)
     }

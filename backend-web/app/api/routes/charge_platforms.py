@@ -46,15 +46,13 @@ async def list_configs(
         search=search,
     )
     items = [ChargePlatformConfigOut.model_validate(item) for item in result["items"]]
-    return ApiResponse(
-        success=True,
-        data={
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-            "items": [item.model_dump(mode="json") for item in items],
-        },
-    )
+    return {
+        "success": True,
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "items": [item.model_dump(mode="json") for item in items],
+    }
 
 
 @router.post("/configs")
@@ -153,23 +151,23 @@ async def list_sku_mappings(
     current_user: User = Depends(deps.get_current_active_user),
     service: ChargePlatformService = Depends(get_charge_service),
 ):
+    _, is_admin = resolve_owner_scope(current_user)
     result = await service.list_sku_mappings(
-        owner_id=current_user.id,
+        owner_id=current_user.id if not is_admin else None,
+        is_admin=is_admin,
         page=page,
         page_size=page_size,
         item_id=item_id,
         platform_config_id=platform_config_id,
     )
     items = [ChargeSkuMappingOut.model_validate(item) for item in result["items"]]
-    return ApiResponse(
-        success=True,
-        data={
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-            "items": [item.model_dump(mode="json") for item in items],
-        },
-    )
+    return {
+        "success": True,
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "items": [item.model_dump(mode="json") for item in items],
+    }
 
 
 @router.post("/sku-mappings")
@@ -240,23 +238,23 @@ async def list_orders(
     current_user: User = Depends(deps.get_current_active_user),
     service: ChargePlatformService = Depends(get_charge_service),
 ):
+    _, is_admin = resolve_owner_scope(current_user)
     result = await service.list_orders(
-        owner_id=current_user.id,
+        owner_id=current_user.id if not is_admin else None,
+        is_admin=is_admin,
         page=page,
         page_size=page_size,
         status=status,
         xy_order_no=xy_order_no,
     )
     items = [ChargeOrderOut.model_validate(item) for item in result["items"]]
-    return ApiResponse(
-        success=True,
-        data={
-            "total": result["total"],
-            "page": result["page"],
-            "page_size": result["page_size"],
-            "items": [item.model_dump(mode="json") for item in items],
-        },
-    )
+    return {
+        "success": True,
+        "total": result["total"],
+        "page": result["page"],
+        "page_size": result["page_size"],
+        "items": [item.model_dump(mode="json") for item in items],
+    }
 
 
 @router.get("/orders/{order_id}")

@@ -21,18 +21,19 @@ class ChargeRecipeService:
 
     async def list_recipes(
         self,
-        owner_id: int,
+        owner_id: int | None,
+        is_admin: bool = False,
         page: int = 1,
         page_size: int = 20,
         item_id: str = "",
         platform_config_id: int | None = None,
     ) -> dict[str, Any]:
-        stmt = select(ChargeSkuRecipe).where(ChargeSkuRecipe.owner_id == owner_id)
-        count_stmt = (
-            select(func.count())
-            .select_from(ChargeSkuRecipe)
-            .where(ChargeSkuRecipe.owner_id == owner_id)
-        )
+        stmt = select(ChargeSkuRecipe)
+        count_stmt = select(func.count()).select_from(ChargeSkuRecipe)
+
+        if not is_admin:
+            stmt = stmt.where(ChargeSkuRecipe.owner_id == owner_id)
+            count_stmt = count_stmt.where(ChargeSkuRecipe.owner_id == owner_id)
 
         if item_id:
             stmt = stmt.where(ChargeSkuRecipe.item_id == item_id)
