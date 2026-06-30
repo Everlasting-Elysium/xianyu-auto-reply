@@ -259,3 +259,7 @@ reset_user_password.sh
 # 核心逻辑已合并至 common/services/captcha/，此目录仅为本地调试用
 # ------------------------------------------
 slider_test/
+
+# All-in-One 部署数据目录
+data/
+xianyu-backup-*.tar.gz

@@ -61,9 +61,17 @@ NEED_INIT=0
 if [ ! -d "$MYSQL_DATA_DIR/mysql" ]; then
     NEED_INIT=1
     echo "[INIT] Initializing MySQL data directory..."
-    mysqld --initialize-insecure --user=mysql --datadir="$MYSQL_DATA_DIR"
+    chown -R mysql:mysql "$MYSQL_DATA_DIR"
+    if command -v mariadb-install-db >/dev/null 2>&1; then
+        mariadb-install-db --user=mysql --datadir="$MYSQL_DATA_DIR" --skip-test-db --auth-root-authentication-method=normal
+    elif command -v mysql_install_db >/dev/null 2>&1; then
+        mysql_install_db --user=mysql --datadir="$MYSQL_DATA_DIR" --auth-root-authentication-method=normal
+    else
+        mysqld --initialize-insecure --user=mysql --datadir="$MYSQL_DATA_DIR"
+    fi
 else
     echo "[INFO] MySQL data directory exists."
+    chown -R mysql:mysql "$MYSQL_DATA_DIR" 2>/dev/null || true
 fi
 
 echo "[INIT] Starting MySQL for setup..."
