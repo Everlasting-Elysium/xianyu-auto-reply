@@ -455,9 +455,67 @@ class CookieManager:
             await self.start_all_tasks()
             
             logger.info(f"CookieManager启动完成,已启动 {len(self.tasks)} 个账号任务")
+
+            # 启动定时同步：每分钟对比数据库中的 active 账号与内存中的 tasks，
+            # 自动启动数据库新增/启用但内存里没跑的账号，自动停止数据库禁用/删除的账号
+            self._sync_task = asyncio.create_task(self._db_sync_loop())
+            logger.info("CookieManager DB同步循环已启动")
         except Exception as e:
             logger.error(f"CookieManager启动失败: {safe_str(e)}")
             raise
+
+    async def _db_sync_loop(self, interval_seconds: int = 60):
+        """定时把内存中的运行任务集合与数据库 xy_accounts (status='active') 对齐。
+        
+        解决场景：
+        - 启动竞态：服务起来时表还没建好，load_from_db 加载到 0 账号，需要定时重试
+        - 运行时新增：管理员在 UI 添加账号后，无需手动调 /internal/accounts/{id}/start
+        - 运行时禁用：DB 中标记禁用后，自动停止对应任务
+        """
+        from common.db.session import async_session_maker
+        from common.models import XYAccount
+        from sqlalchemy import select
+
+        while True:
+            try:
+                await asyncio.sleep(interval_seconds)
+                async with async_session_maker() as session:
+                    result = await session.execute(
+                        select(XYAccount.account_id, XYAccount.cookie, XYAccount.owner_id, XYAccount.status)
+                    )
+                    db_accounts = {row[0]: row for row in result.all()}
+
+                running_ids = set(self.tasks.keys())
+                db_active_ids = {aid for aid, row in db_accounts.items() if row[3] == "active"}
+
+                # 新增/重启
+                missing = db_active_ids - running_ids
+                for aid in missing:
+                    row = db_accounts[aid]
+                    cookie_value = row[1] or ""
+                    owner_id = row[2]
+                    logger.info(f"[db-sync] 发现 DB 中 active 但未运行的账号: {aid}，自动启动")
+                    self.cookie_status[aid] = True
+                    self.auto_confirm_settings.setdefault(aid, True)
+                    self.keywords.setdefault(aid, [])
+                    try:
+                        await self._add_cookie_async(aid, cookie_value, owner_id)
+                    except Exception as e:
+                        logger.warning(f"[db-sync] 启动账号 {aid} 失败: {safe_str(e)}")
+
+                # 禁用/删除
+                stale = running_ids - db_active_ids
+                for aid in stale:
+                    logger.info(f"[db-sync] 发现内存中运行但 DB 中已禁用/删除的账号: {aid}，停止任务")
+                    try:
+                        await self._stop_task_async(aid)
+                    except Exception as e:
+                        logger.warning(f"[db-sync] 停止账号 {aid} 失败: {safe_str(e)}")
+            except asyncio.CancelledError:
+                logger.info("CookieManager DB同步循环收到取消信号，退出")
+                break
+            except Exception as e:
+                logger.error(f"[db-sync] 同步循环异常: {safe_str(e)}")
     
     async def stop(self):
         """停止CookieManager,停止所有账号任务"""

@@ -57,40 +57,57 @@ mkdir -p /app/websocket/browser_data
 # ---------- 初始化 MySQL ----------
 MYSQL_DATA_DIR=/var/lib/mysql
 
+NEED_INIT=0
 if [ ! -d "$MYSQL_DATA_DIR/mysql" ]; then
+    NEED_INIT=1
     echo "[INIT] Initializing MySQL data directory..."
     mysqld --initialize-insecure --user=mysql --datadir="$MYSQL_DATA_DIR"
+else
+    echo "[INFO] MySQL data directory exists."
+fi
 
-    echo "[INIT] Starting MySQL for initialization..."
-    mysqld_safe --skip-networking &
-    MYSQL_PID=$!
+echo "[INIT] Starting MySQL for setup..."
+mysqld_safe --skip-networking &
+MYSQL_PID=$!
 
-    # 等待 MySQL 启动
-    for i in $(seq 1 30); do
-        if mysqladmin ping --silent 2>/dev/null; then
-            break
-        fi
-        echo "[INIT] Waiting for MySQL... ($i/30)"
-        sleep 1
-    done
+for i in $(seq 1 30); do
+    if MYSQL_HOST= mysqladmin ping --socket=/var/run/mysqld/mysqld.sock --silent 2>/dev/null; then
+        break
+    fi
+    echo "[INIT] Waiting for MySQL... ($i/30)"
+    sleep 1
+done
 
-    echo "[INIT] Creating database and user..."
-    mysql -u root <<-EOSQL
-        ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
-        CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-        CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
-        GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
-        FLUSH PRIVILEGES;
+echo "[INIT] Configuring database and user..."
+if MYSQL_HOST= mysql -u root --socket=/var/run/mysqld/mysqld.sock -e "SELECT 1" >/dev/null 2>&1; then
+    ROOT_AUTH=""
+else
+    ROOT_AUTH="-p${MYSQL_ROOT_PASSWORD}"
+fi
+MYSQL_HOST= mysql -u root ${ROOT_AUTH} --socket=/var/run/mysqld/mysqld.sock <<-EOSQL
+    ALTER USER 'root'@'localhost' IDENTIFIED BY '${MYSQL_ROOT_PASSWORD}';
+    CREATE DATABASE IF NOT EXISTS \`${MYSQL_DATABASE}\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    CREATE USER IF NOT EXISTS '${MYSQL_USER}'@'%' IDENTIFIED BY '${MYSQL_PASSWORD}';
+    GRANT ALL PRIVILEGES ON \`${MYSQL_DATABASE}\`.* TO '${MYSQL_USER}'@'%';
+    FLUSH PRIVILEGES;
 EOSQL
 
-    echo "[INIT] Stopping bootstrap MySQL..."
-    mysqladmin -u root -p"${MYSQL_ROOT_PASSWORD}" shutdown 2>/dev/null || kill $MYSQL_PID 2>/dev/null
-    wait $MYSQL_PID 2>/dev/null || true
-    sleep 2
-    echo "[INIT] MySQL initialization complete."
-else
-    echo "[INFO] MySQL data directory exists, skipping initialization."
-fi
+echo "[INIT] Stopping bootstrap MySQL..."
+MYSQL_HOST= mysqladmin -u root --socket=/var/run/mysqld/mysqld.sock -p"${MYSQL_ROOT_PASSWORD}" shutdown 2>/dev/null || kill $MYSQL_PID 2>/dev/null
+wait $MYSQL_PID 2>/dev/null || true
+sleep 2
+echo "[INIT] MySQL ready."
+
+echo "[INIT] Starting MySQL on TCP for table init..."
+mysqld_safe &
+MYSQL_PID=$!
+for i in $(seq 1 30); do
+    if mysqladmin ping -h 127.0.0.1 -P 3306 -u "${MYSQL_USER}" -p"${MYSQL_PASSWORD}" --silent 2>/dev/null; then
+        break
+    fi
+    echo "[INIT] Waiting for MySQL TCP... ($i/30)"
+    sleep 1
+done
 
 # ---------- 写入服务 .env 文件 ----------
 for SVC_DIR in /app/backend-web /app/websocket /app/scheduler; do
@@ -127,6 +144,18 @@ REFRESH_TOKEN_EXPIRE_MINUTES=${REFRESH_TOKEN_EXPIRE_MINUTES}
 TZ=${TZ}
 EOF
 done
+
+echo "[INIT] Initializing database tables (run before supervisord starts services)..."
+cd /app/backend-web && PYTHONPATH=/app python -m common.db.init_database || {
+    echo "[ERROR] Database table initialization failed!"
+    exit 1
+}
+echo "[INIT] Database tables ready."
+
+echo "[INIT] Stopping bootstrap MySQL (supervisord will restart it)..."
+mysqladmin -h 127.0.0.1 -P 3306 -u root -p"${MYSQL_ROOT_PASSWORD}" shutdown 2>/dev/null || kill $MYSQL_PID 2>/dev/null
+wait $MYSQL_PID 2>/dev/null || true
+sleep 2
 
 echo "[INFO] Starting all services via Supervisor..."
 exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf

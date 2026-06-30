@@ -8,7 +8,9 @@ ENV TZ=Asia/Shanghai
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y \
+RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debian.sources 2>/dev/null; \
+    sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list 2>/dev/null; \
+    apt-get update && apt-get install -y \
     default-mysql-server \
     redis-server \
     nginx \
@@ -27,16 +29,16 @@ COPY websocket /app/websocket
 COPY scheduler /app/scheduler
 COPY launcher /app/launcher
 
-RUN python -c "\
-import tomllib; \
-deps = set(); \
-for p in ['/app/backend-web/pyproject.toml', '/app/websocket/pyproject.toml', '/app/scheduler/pyproject.toml']: \
-    d = tomllib.load(open(p,'rb')).get('project',{}).get('dependencies',[]); \
-    deps.update(d); \
-deps = {d for d in deps if 'sys_platform' not in d}; \
-open('/tmp/requirements.txt','w').write('\n'.join(sorted(deps)))" && \
-    pip install --no-cache-dir -r /tmp/requirements.txt && \
-    rm /tmp/requirements.txt
+RUN <<'PYEOF' python
+import tomllib
+deps = set()
+for p in ['/app/backend-web/pyproject.toml', '/app/websocket/pyproject.toml', '/app/scheduler/pyproject.toml']:
+    d = tomllib.load(open(p,'rb')).get('project',{}).get('dependencies',[])
+    deps.update(d)
+deps = {d for d in deps if 'sys_platform' not in d}
+open('/tmp/requirements.txt','w').write(chr(10).join(sorted(deps)))
+PYEOF
+RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 RUN python -m playwright install --with-deps chromium
 
