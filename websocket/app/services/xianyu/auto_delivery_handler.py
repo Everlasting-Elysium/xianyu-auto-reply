@@ -350,6 +350,7 @@ class AutoDeliveryHandler:
     async def _try_charge_order_trigger(
         self,
         *,
+        websocket,
         order_id: str,
         item_id: str,
         chat_id: str | None,
@@ -360,7 +361,7 @@ class AutoDeliveryHandler:
         尝试触发代刷流程。
 
         Returns:
-            True：命中代刷配方，已处理（成功/失败/参数不全），调用方应跳过原卡券发货
+            True：命中代刷配方，已处理（成功/失败/参数不全/重复购买），调用方应跳过原卡券发货
             False：未命中代刷配方，调用方继续原卡券发货流程
         """
         from sqlalchemy import select
@@ -393,6 +394,68 @@ class AutoDeliveryHandler:
             f'order={order_id} charge_order_id={result.charge_order_id} '
             f'final_status={result.final_status} reason={result.reason}'
         )
+
+        if result.buyer_notice and chat_id and buyer_id and websocket is not None:
+            try:
+                await self.send_msg(websocket, chat_id, buyer_id, result.buyer_notice)
+                logger.info(
+                    f'[{msg_time}] 【{self.cookie_id}】已向买家 {buyer_id} 发送代刷提示: '
+                    f'{result.buyer_notice[:60]}...'
+                )
+            except Exception as e:
+                logger.warning(
+                    f'[{msg_time}] 【{self.cookie_id}】发送代刷提示给买家失败: {self._safe_str(e)}'
+                )
+
+        if result.final_status == "cancelled" and result.reason:
+            try:
+                await self._update_delivery_fail_reason(
+                    order_id,
+                    f"代刷分叉拦截：{result.reason}",
+                )
+            except Exception as e:
+                logger.warning(
+                    f'[{msg_time}] 【{self.cookie_id}】写入闲鱼订单 fail_reason 失败: {self._safe_str(e)}'
+                )
+
+        if result.should_confirm_delivery:
+            try:
+                confirm_result = await self.auto_confirm(order_id, item_id)
+                if confirm_result.get('success'):
+                    logger.info(
+                        f'[{msg_time}] 【{self.cookie_id}】🎉 代刷成功后自动确认发货成功: order_id={order_id}'
+                    )
+                    self.mark_delivery_sent(order_id)
+                    try:
+                        from common.services.order_service import OrderService
+                        from common.db.session import async_session_maker as _maker
+                        async with _maker() as db_session:
+                            order_service = OrderService(db_session)
+                            await order_service.update_order_delivery_info(
+                                order_no=order_id,
+                                status="shipped",
+                                delivery_method="auto",
+                                delivery_content=f"代刷自动下单成功 (charge_order_id={result.charge_order_id})",
+                            )
+                    except Exception as e:
+                        logger.warning(
+                            f'[{msg_time}] 【{self.cookie_id}】更新订单状态为 shipped 失败: {self._safe_str(e)}'
+                        )
+                else:
+                    confirm_error = confirm_result.get('error') or confirm_result.get('message') or '未知错误'
+                    logger.warning(
+                        f'[{msg_time}] 【{self.cookie_id}】⚠️ 代刷成功但自动确认发货失败: '
+                        f'order_id={order_id} error={confirm_error}'
+                    )
+                    await self._update_delivery_fail_reason(
+                        order_id,
+                        f"代刷已成功下单，但自动确认发货失败：{confirm_error}",
+                    )
+            except Exception as e:
+                logger.error(
+                    f'[{msg_time}] 【{self.cookie_id}】代刷成功后确认发货异常: {self._safe_str(e)}'
+                )
+
         return result.skip_card_delivery
 
     async def send_delivery_failure_notification(self, send_user_name, send_user_id, item_id, error_message, chat_id):
@@ -1032,6 +1095,7 @@ class AutoDeliveryHandler:
                 # 文档：common/services/charge_order_trigger.py 顶部 docstring 说明四种命中分支
                 try:
                     charge_skipped = await self._try_charge_order_trigger(
+                        websocket=websocket,
                         order_id=order_id, item_id=item_id,
                         chat_id=chat_id, buyer_id=send_user_id, msg_time=msg_time,
                     )
