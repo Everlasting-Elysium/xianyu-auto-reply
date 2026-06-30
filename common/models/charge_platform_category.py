@@ -44,6 +44,6 @@ class ChargePlatformCategory(TimestampMixin, Base):
         comment="平台 Status=1 表示启用"
     )
     last_synced_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False,
+        DateTime, nullable=False,
         comment="本地同步时间"
     )

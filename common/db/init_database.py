@@ -1554,6 +1554,206 @@ class DatabaseInitializer:
                 INDEX idx_chat_quick_phrase_owner_sort (owner_id, sort_order)
             ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='在线聊天快捷短语';
         """,
+
+        # 52. 流量充值平台账号配置表
+        "charge_platform_configs": """
+            CREATE TABLE IF NOT EXISTS charge_platform_configs (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                owner_id BIGINT DEFAULT NULL COMMENT '配置归属用户ID，NULL表示全局共享',
+                name VARCHAR(64) NOT NULL COMMENT '账号别名',
+                platform_url VARCHAR(256) NOT NULL DEFAULT 'https://xckj9.008e1.top' COMMENT '平台基础URL',
+                username VARCHAR(128) NOT NULL COMMENT '登录账号',
+                password TEXT NOT NULL COMMENT '登录密码',
+                session_json JSON DEFAULT NULL COMMENT 'Cookie/Token备份',
+                session_expires_at DATETIME DEFAULT NULL COMMENT '登录态预计失效时间',
+                last_login_at DATETIME DEFAULT NULL COMMENT '最近一次成功登录时间',
+                status VARCHAR(32) NOT NULL DEFAULT 'active' COMMENT '账号状态：active/disabled/risk_controlled/login_failed/balance_low',
+                enabled TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+                balance DECIMAL(12,2) DEFAULT NULL COMMENT '最近一次查询的账户余额（元）',
+                balance_alert_threshold DECIMAL(12,2) NOT NULL DEFAULT 50.00 COMMENT '余额告警阈值（元）',
+                balance_checked_at DATETIME DEFAULT NULL COMMENT '最近一次余额查询时间',
+                max_orders_per_hour BIGINT NOT NULL DEFAULT 20 COMMENT '每小时最大下单数，防风控',
+                last_error VARCHAR(512) DEFAULT NULL COMMENT '最近一次错误描述',
+                last_error_at DATETIME DEFAULT NULL COMMENT '最近一次错误时间',
+                remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+                extra_config JSON DEFAULT NULL COMMENT '扩展配置',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_platform_owner (owner_id),
+                INDEX idx_charge_platform_status (status)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='流量充值平台账号配置表';
+        """,
+
+        # 53. 流量充值套餐映射表
+        "charge_sku_mappings": """
+            CREATE TABLE IF NOT EXISTS charge_sku_mappings (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                owner_id BIGINT NOT NULL COMMENT '所属用户ID',
+                platform_config_id BIGINT NOT NULL COMMENT '关联平台账号ID',
+                item_id VARCHAR(64) NOT NULL COMMENT '闲鱼商品ID',
+                spec_value VARCHAR(120) DEFAULT NULL COMMENT '闲鱼商品规格值，NULL表示匹配所有规格',
+                platform_sku_id VARCHAR(128) NOT NULL COMMENT '平台套餐/商品ID',
+                platform_sku_name VARCHAR(256) DEFAULT NULL COMMENT '平台套餐名称',
+                is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+                remark VARCHAR(255) DEFAULT NULL COMMENT '备注',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_sku_owner (owner_id),
+                INDEX idx_charge_sku_item (item_id),
+                INDEX idx_charge_sku_platform_cfg (platform_config_id),
+                UNIQUE KEY uq_charge_sku_owner_item_spec (owner_id, item_id, spec_value)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='流量充值套餐映射表';
+        """,
+
+        # 54. 平台分类缓存表
+        "charge_platform_categories": """
+            CREATE TABLE IF NOT EXISTS charge_platform_categories (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                platform_config_id BIGINT NOT NULL COMMENT '关联平台账号ID',
+                platform_category_id BIGINT NOT NULL COMMENT '平台分类ID',
+                parent_id BIGINT NOT NULL DEFAULT 0 COMMENT '父分类ID，0表示顶级',
+                name VARCHAR(128) NOT NULL COMMENT '分类名称',
+                level INT NOT NULL DEFAULT 1 COMMENT '分类层级',
+                sort INT NOT NULL DEFAULT 0 COMMENT '排序值',
+                thumb VARCHAR(512) DEFAULT NULL COMMENT '缩略图URL',
+                is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+                last_synced_at DATETIME NOT NULL COMMENT '本地同步时间',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_cat_platform (platform_config_id),
+                INDEX idx_charge_cat_parent (platform_config_id, parent_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='平台分类缓存表';
+        """,
+
+        # 55. 平台商品仓库缓存表
+        "charge_platform_goods": """
+            CREATE TABLE IF NOT EXISTS charge_platform_goods (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                platform_config_id BIGINT NOT NULL COMMENT '关联平台账号ID',
+                platform_goods_id VARCHAR(64) NOT NULL COMMENT '平台商品ID',
+                gid VARCHAR(64) DEFAULT NULL COMMENT '平台商品Gid',
+                name VARCHAR(256) NOT NULL COMMENT '商品名称',
+                class_name_1 VARCHAR(128) DEFAULT NULL COMMENT '一级分类名',
+                class_name_2 VARCHAR(128) DEFAULT NULL COMMENT '二级分类名',
+                class_name_3 VARCHAR(128) DEFAULT NULL COMMENT '三级分类名',
+                price DECIMAL(18,10) NOT NULL DEFAULT 0 COMMENT '单价',
+                stock INT NOT NULL DEFAULT -1 COMMENT '库存，-1表示不限制',
+                min_order_num INT NOT NULL DEFAULT 1 COMMENT '最小起订数',
+                max_order_num INT NOT NULL DEFAULT 0 COMMENT '最大订购数，0表示不限制',
+                unit VARCHAR(32) DEFAULT NULL COMMENT '单位',
+                goods_type INT DEFAULT NULL COMMENT '商品类型',
+                params_template TEXT DEFAULT NULL COMMENT '参数模板JSON字符串',
+                thumb VARCHAR(512) DEFAULT NULL COMMENT '缩略图URL',
+                is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+                last_synced_at DATETIME NOT NULL COMMENT '最近同步时间',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_goods_platform (platform_config_id),
+                INDEX idx_charge_goods_class_name (platform_config_id, class_name_1, class_name_2),
+                INDEX idx_charge_goods_price (platform_config_id, is_active, price),
+                UNIQUE KEY uq_charge_goods_goods_id (platform_config_id, platform_goods_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='平台商品仓库缓存表';
+        """,
+
+        # 56. 代刷配方表
+        "charge_sku_recipes": """
+            CREATE TABLE IF NOT EXISTS charge_sku_recipes (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                owner_id BIGINT NOT NULL COMMENT '所属用户ID',
+                platform_config_id BIGINT NOT NULL COMMENT '使用哪个平台账号下单',
+                item_id VARCHAR(64) NOT NULL COMMENT '闲鱼商品ID',
+                spec_value VARCHAR(120) DEFAULT NULL COMMENT '闲鱼商品规格值，NULL表示匹配所有规格',
+                name VARCHAR(128) NOT NULL COMMENT '配方名称',
+                description VARCHAR(512) DEFAULT NULL COMMENT '配方描述',
+                require_input_keys JSON DEFAULT NULL COMMENT '买家备注中必须包含的key列表',
+                is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_recipe_owner (owner_id),
+                INDEX idx_charge_recipe_item (item_id),
+                UNIQUE KEY uq_charge_recipe_owner_item_spec (owner_id, item_id, spec_value)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='代刷配方表';
+        """,
+
+        # 57. 代刷配方子项表
+        "charge_sku_recipe_items": """
+            CREATE TABLE IF NOT EXISTS charge_sku_recipe_items (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                recipe_id BIGINT NOT NULL COMMENT '关联配方ID',
+                sort INT NOT NULL DEFAULT 0 COMMENT '执行顺序',
+                tag VARCHAR(64) NOT NULL COMMENT '业务标签（如"抖音点赞""小红书收藏"）',
+                preferred_sku_ids JSON DEFAULT NULL COMMENT '优先SKU ID列表',
+                fallback_class_name_1 VARCHAR(128) DEFAULT NULL COMMENT '兜底一级分类名',
+                fallback_class_name_2 VARCHAR(128) DEFAULT NULL COMMENT '兜底二级分类名',
+                quantity INT NOT NULL DEFAULT 1 COMMENT '下单数量',
+                cf_count INT NOT NULL DEFAULT 0 COMMENT '重复刷的次数',
+                input_value_overrides JSON DEFAULT NULL COMMENT '按key覆盖买家备注值',
+                is_active TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否启用',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_recipe_item_recipe (recipe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='代刷配方子项表';
+        """,
+
+        # 58. 代刷主单表
+        "charge_orders": """
+            CREATE TABLE IF NOT EXISTS charge_orders (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                owner_id BIGINT NOT NULL COMMENT '所属用户ID',
+                xy_account_id VARCHAR(80) DEFAULT NULL COMMENT '触发订单的闲鱼账号ID',
+                xy_order_no VARCHAR(64) NOT NULL COMMENT '关联闲鱼订单号',
+                chat_id VARCHAR(64) DEFAULT NULL COMMENT '聊天会话ID',
+                buyer_id VARCHAR(80) DEFAULT NULL COMMENT '买家ID',
+                platform_config_id BIGINT NOT NULL COMMENT '关联平台账号ID',
+                recipe_id BIGINT DEFAULT NULL COMMENT '命中的代刷配方ID',
+                item_id VARCHAR(64) DEFAULT NULL COMMENT '闲鱼商品ID',
+                spec_value VARCHAR(120) DEFAULT NULL COMMENT '闲鱼商品规格值',
+                buyer_input_params JSON DEFAULT NULL COMMENT '买家备注中提取的输入参数',
+                status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '订单状态：pending/ordering/success/partial_success/failed/cancelled/needs_review',
+                retry_count INT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+                max_retries INT NOT NULL DEFAULT 3 COMMENT '最大重试次数',
+                next_retry_at DATETIME DEFAULT NULL COMMENT '下次重试时间',
+                ordered_at DATETIME DEFAULT NULL COMMENT '下单成功时间',
+                fail_reason TEXT DEFAULT NULL COMMENT '失败原因',
+                extra_data JSON DEFAULT NULL COMMENT '额外数据',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_order_xy (xy_order_no),
+                INDEX idx_charge_order_owner_status (owner_id, status),
+                INDEX idx_charge_order_next_retry (status, next_retry_at),
+                INDEX idx_charge_order_chat (chat_id),
+                INDEX idx_charge_order_recipe (recipe_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='代刷主单表';
+        """,
+
+        # 59. 代刷子单表
+        "charge_order_sub_orders": """
+            CREATE TABLE IF NOT EXISTS charge_order_sub_orders (
+                id BIGINT PRIMARY KEY AUTO_INCREMENT COMMENT '主键ID',
+                charge_order_id BIGINT NOT NULL COMMENT '所属主单ID',
+                recipe_item_id BIGINT DEFAULT NULL COMMENT '对应的配方子项ID',
+                sort INT NOT NULL DEFAULT 0 COMMENT '排序',
+                tag VARCHAR(64) NOT NULL COMMENT '业务标签快照',
+                platform_goods_id VARCHAR(64) DEFAULT NULL COMMENT '选中的平台商品ID',
+                platform_goods_name VARCHAR(256) DEFAULT NULL COMMENT '选中的平台商品名快照',
+                unit_price DECIMAL(18,10) DEFAULT NULL COMMENT '下单时单价快照',
+                quantity INT NOT NULL COMMENT '数量',
+                cf_count INT NOT NULL DEFAULT 0 COMMENT '重复刷次数',
+                order_params JSON DEFAULT NULL COMMENT '提交给平台的OrderParams快照',
+                platform_order_id VARCHAR(128) DEFAULT NULL COMMENT '平台返回的订单号',
+                status VARCHAR(32) NOT NULL DEFAULT 'pending' COMMENT '子单状态：pending/ordering/success/failed/skipped/needs_review',
+                retry_count INT NOT NULL DEFAULT 0 COMMENT '已重试次数',
+                next_retry_at DATETIME DEFAULT NULL COMMENT '下次重试时间',
+                fail_reason TEXT DEFAULT NULL COMMENT '失败原因',
+                ordered_at DATETIME DEFAULT NULL COMMENT '下单成功时间',
+                response_raw JSON DEFAULT NULL COMMENT '平台返回原始数据',
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+                updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+                INDEX idx_charge_sub_order_main (charge_order_id),
+                INDEX idx_charge_sub_order_status (status),
+                INDEX idx_charge_sub_order_platform (platform_order_id)
+            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='代刷子单表';
+        """,
     }
     
     # 字段迁移定义：表名 -> [(字段名, 字段定义, 在哪个字段后面)]

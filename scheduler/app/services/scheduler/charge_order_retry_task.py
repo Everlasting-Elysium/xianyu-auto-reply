@@ -1,7 +1,9 @@
 """代刷主单失败/待处理订单定时重试任务（默认每 5min）"""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
+
+from common.utils.time_utils import get_beijing_now_naive
 
 from loguru import logger
 from sqlalchemy import or_, select
@@ -45,7 +47,7 @@ class ChargeOrderRetryTask:
             return f"执行异常: {e}"
 
     async def _list_retryable(self, session: AsyncSession) -> list[ChargeOrder]:
-        now = datetime.now(timezone.utc)
+        now = get_beijing_now_naive()
         stmt = (
             select(ChargeOrder)
             .where(
@@ -70,7 +72,7 @@ class ChargeOrderRetryTask:
             order.status = "pending"
         order.retry_count = (order.retry_count or 0) + 1
         backoff_minutes = DEFAULT_BACKOFF_FACTOR_MINUTES * (2 ** order.retry_count)
-        order.next_retry_at = datetime.now(timezone.utc) + timedelta(minutes=backoff_minutes)
+        order.next_retry_at = get_beijing_now_naive() + timedelta(minutes=backoff_minutes)
         await session.commit()
 
         try:

@@ -20,7 +20,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from common.utils.time_utils import get_beijing_now_naive
 from typing import Any
 
 from loguru import logger
@@ -276,7 +276,7 @@ class ChargeOrderExecutor:
         sub.platform_order_id = str(result.get("id") or result.get("orderId") or "")
         sub.response_raw = result
         sub.status = "success"
-        sub.ordered_at = datetime.now(timezone.utc)
+        sub.ordered_at = get_beijing_now_naive()
         await self.session.commit()
         logger.info(
             f"[charge-exec] main={main_order.id} sub={sub.id} tag={sub.tag} "
@@ -359,7 +359,7 @@ class ChargeOrderExecutor:
             order.status = "failed"
             order.fail_reason = f"全部子项失败/跳过：失败 {failed}, 跳过 {skipped}"
 
-        order.ordered_at = datetime.now(timezone.utc)
+        order.ordered_at = get_beijing_now_naive()
         await self.session.commit()
 
         logger.info(

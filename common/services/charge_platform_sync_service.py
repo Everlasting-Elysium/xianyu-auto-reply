@@ -13,7 +13,7 @@ xckj9 平台分类树与商品仓库同步服务
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime, timezone
+from common.utils.time_utils import get_beijing_now_naive
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -62,7 +62,7 @@ class ChargePlatformSyncService:
         flat: list[dict[str, Any]] = []
         self._flatten_categories(raw_tree, flat)
 
-        synced_at = datetime.now(timezone.utc)
+        synced_at = get_beijing_now_naive()
         inserted = updated = 0
         seen_ids: list[int] = []
 
@@ -132,7 +132,7 @@ class ChargePlatformSyncService:
         delay_between_pages: float = 0.2,
     ) -> dict[str, int]:
         client = ChargePlatformClient(config)
-        synced_at = datetime.now(timezone.utc)
+        synced_at = get_beijing_now_naive()
         inserted = updated = total = 0
         seen_goods_ids: list[str] = []
         fully_traversed = False

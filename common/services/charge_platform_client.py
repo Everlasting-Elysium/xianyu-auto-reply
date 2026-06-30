@@ -11,7 +11,9 @@ xckj9 社交媒体代刷平台 HTTP 客户端
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta
+
+from common.utils.time_utils import get_beijing_now_naive
 from decimal import Decimal
 from typing import Any
 
@@ -107,7 +109,7 @@ class ChargePlatformClient:
         if self.config.session_json:
             saved_token = self.config.session_json.get("access_token")
             expires_at = self.config.session_expires_at
-            if saved_token and (not expires_at or expires_at > datetime.now(timezone.utc)):
+            if saved_token and (not expires_at or expires_at > get_beijing_now_naive()):
                 logger.debug(f"[charge-platform:{self.config_id}] token loaded from DB backup")
                 return saved_token
 
@@ -129,9 +131,9 @@ class ChargePlatformClient:
                 cfg = await session.get(ChargePlatformConfig, self.config_id)
                 if not cfg:
                     return
-                cfg.session_json = {"access_token": token, "saved_at": datetime.now(timezone.utc).isoformat()}
-                cfg.session_expires_at = datetime.now(timezone.utc) + timedelta(seconds=REDIS_TOKEN_TTL_SECONDS)
-                cfg.last_login_at = datetime.now(timezone.utc)
+                cfg.session_json = {"access_token": token, "saved_at": get_beijing_now_naive().isoformat()}
+                cfg.session_expires_at = get_beijing_now_naive() + timedelta(seconds=REDIS_TOKEN_TTL_SECONDS)
+                cfg.last_login_at = get_beijing_now_naive()
                 cfg.last_error = None
                 cfg.last_error_at = None
                 await session.commit()
@@ -152,7 +154,7 @@ class ChargePlatformClient:
                     cfg.session_json = None
                     cfg.session_expires_at = None
                     cfg.last_error = f"token invalidated: {reason}"
-                    cfg.last_error_at = datetime.now(timezone.utc)
+                    cfg.last_error_at = get_beijing_now_naive()
                     await session.commit()
         except Exception as e:
             logger.warning(f"[charge-platform:{self.config_id}] token DB 失效标记写库异常: {e}")
@@ -186,7 +188,7 @@ class ChargePlatformClient:
                 if cfg:
                     cfg.status = "login_failed"
                     cfg.last_error = reason
-                    cfg.last_error_at = datetime.now(timezone.utc)
+                    cfg.last_error_at = get_beijing_now_naive()
                     await session.commit()
                     owner_id_for_notify = cfg.owner_id
         except Exception as e:
@@ -279,7 +281,7 @@ class ChargePlatformClient:
                 cfg = await session.get(ChargePlatformConfig, self.config_id)
                 if cfg:
                     cfg.balance = balance
-                    cfg.balance_checked_at = datetime.now(timezone.utc)
+                    cfg.balance_checked_at = get_beijing_now_naive()
                     if balance < cfg.balance_alert_threshold and cfg.status == "active":
                         cfg.status = "balance_low"
                         should_notify_low = True
@@ -351,7 +353,7 @@ class ChargePlatformClient:
         exp_time: datetime | None = None,
         zx_type: int = 1,
     ) -> dict[str, Any]:
-        exp_time = exp_time or datetime.now()
+        exp_time = exp_time or get_beijing_now_naive()
         order_params = [params]
 
         payload = {

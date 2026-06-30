@@ -69,9 +69,9 @@ class ChargeOrderSubOrder(TimestampMixin, Base):
         comment="pending/ordering/success/failed/skipped/needs_review"
     )
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     fail_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
-    ordered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ordered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     response_raw: Mapped[dict[str, Any] | None] = mapped_column(
         JSON, nullable=True,
         comment="平台返回原始数据（成功+失败都存）"

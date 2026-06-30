@@ -49,11 +49,11 @@ class ChargePlatformConfig(TimestampMixin, Base):
         comment="Cookie/Token 备份，Redis miss 时使用：{cookies: [...], tokens: {...}}"
     )
     session_expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime, nullable=True,
         comment="登录态预计失效时间"
     )
     last_login_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime, nullable=True,
         comment="最近一次成功登录时间"
     )
     status: Mapped[str] = mapped_column(
@@ -73,7 +73,7 @@ class ChargePlatformConfig(TimestampMixin, Base):
         comment="余额告警阈值（元），低于此值触发通知"
     )
     balance_checked_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime, nullable=True,
         comment="最近一次余额查询时间"
     )
     max_orders_per_hour: Mapped[int] = mapped_column(
@@ -85,7 +85,7 @@ class ChargePlatformConfig(TimestampMixin, Base):
         comment="最近一次错误描述"
     )
     last_error_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime, nullable=True,
         comment="最近一次错误时间"
     )
     remark: Mapped[str | None] = mapped_column(String(255), nullable=True, comment="备注")

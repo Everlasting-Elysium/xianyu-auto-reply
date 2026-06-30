@@ -62,4 +62,4 @@ class ChargePlatformGoods(TimestampMixin, Base):
         Boolean, nullable=False, default=True, server_default="1",
         comment="平台 IsClose=2 表示可用（这里映射为 True）"
     )
-    last_synced_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_synced_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
