@@ -156,10 +156,7 @@ async def list_categories(
         raise HTTPException(status_code=403, detail=str(e))
 
     rows = await service.list_categories(platform_config_id, only_active=only_active)
-    return ApiResponse(
-        success=True,
-        data=[ChargePlatformCategoryOut.model_validate(r).model_dump(mode="json") for r in rows],
-    )
+    return [ChargePlatformCategoryOut.model_validate(r).model_dump(mode="json") for r in rows]
 
 
 @router.get("/goods")
